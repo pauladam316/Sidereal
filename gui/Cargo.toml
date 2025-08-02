@@ -1,0 +1,9 @@
+[package]
+edition = "2021"
+name = "gui"
+resolver = "2"
+version = "0.1.0"
+
+[dependencies]
+iced = {version = "0.13.1", features = ["tokio"]}# or latest; choose backend you want
+once_cell = "1.21.3"

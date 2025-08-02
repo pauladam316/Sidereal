@@ -1,0 +1,3 @@
+[workspace]
+members = ["gui", "planetarium", "launcher"]
+resolver = "2"
