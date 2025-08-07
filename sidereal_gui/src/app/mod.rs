@@ -5,12 +5,12 @@ use crate::{
     config::Config,
     gui::{
         styles::{tab_style::tab_content, SIDEREAL_THEME},
-        tabs::{self, setup, MainWindowState, Tab},
+        tabs::{self, MainWindowState, Tab},
     },
 };
 use iced::widget::{column, row};
 use iced::widget::{container, image};
-use iced::Alignment::{self, Center};
+use iced::Alignment::{self};
 use iced::ContentFit;
 use iced::{widget::text, Element, Length, Task};
 
@@ -25,7 +25,7 @@ pub enum Message {
     Capture(tabs::capture::Message),
     Focus(tabs::focus::Message),
     Guide(tabs::guide::Message),
-    ConfigLoaded,
+    ConfigLoaded(Config),
     ErrorOccurred(String),
     ErrorCleared(),
     LaunchPlanetarium,
@@ -39,10 +39,16 @@ pub struct MainWindow {
 
 impl MainWindow {
     pub fn new() -> (Self, Task<Message>) {
-        let mut app = Self::default();
-        Config::initialize().expect("Failed to load config");
-        app.state.setup.on_config_load();
-        (app, iced::Task::none())
+        let app = Self::default();
+
+        let config_load_task = Task::perform(
+            async {
+                Config::initialize().await.expect("Failed to load config");
+                Ok::<_, String>(Config::get().await)
+            },
+            |config| Message::ConfigLoaded(config.expect("failed to get config")),
+        );
+        (app, config_load_task)
     }
 
     pub fn run(settings: iced::Settings) -> iced::Result {
@@ -81,8 +87,8 @@ impl MainWindow {
             Message::Capture(msg) => {
                 self.state.capture.update(msg);
             }
-            Message::ConfigLoaded => {
-                self.state.setup.on_config_load();
+            Message::ConfigLoaded(config) => {
+                self.state.setup.on_config_load(config);
             }
             Message::ErrorOccurred(err) => {
                 self.error_message = Some(err);

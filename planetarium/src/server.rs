@@ -25,10 +25,13 @@ impl Planetarium for MyPlanetariumServer {
         &self,
         request: Request<SetLocationRequest>,
     ) -> Result<Response<SetLocationResponse>, Status> {
-        println!("Received request: {:?}", request.into_inner());
+        let contents = request.into_inner();
 
         let reply = SetLocationResponse {
-            description: "Hello".to_string(),
+            description: format!(
+                "{} {} {}",
+                contents.latitude, contents.longitude, contents.altitude,
+            ),
         };
         Ok(Response::new(reply))
     }

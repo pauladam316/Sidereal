@@ -7,21 +7,25 @@ use std::{
     process::{Child, Command, Stdio},
 };
 use tokio::sync::Mutex;
-use tonic::transport::Channel; // for before_exec
+use tonic::transport::Channel;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-use crate::config::GLOBAL_CONFIG; // for creation_flags
+use crate::{
+    config::GLOBAL_CONFIG,
+    model::{SiderealError, SiderealResult},
+};
 
 /// A global place to store our planetarium child handle.
 static PLANETARIUM_PROCESS: Lazy<Mutex<Option<Child>>> = Lazy::new(|| Mutex::new(None));
 static PLANETARIUM_CLIENT: Lazy<Mutex<Option<PlanetariumClient<Channel>>>> =
     Lazy::new(|| Mutex::new(None));
+
 /// Spawn & detach the process, returning its Child handle.
 fn spawn_and_detach(path: &str) -> io::Result<Child> {
     let mut binding = Command::new(path);
-    let mut cmd = binding
+    let cmd = binding
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -76,8 +80,8 @@ pub async fn launch_planetarium() -> io::Result<()> {
     Ok(())
 }
 
-pub async fn set_location() -> io::Result<()> {
-    let guard = GLOBAL_CONFIG.write().unwrap();
+pub async fn set_location() -> SiderealResult<()> {
+    let guard = GLOBAL_CONFIG.write().await;
     let mut client_lock = PLANETARIUM_CLIENT.lock().await;
     if let Some(client) = client_lock.as_mut() {
         let request = SetLocationRequest {
@@ -85,10 +89,13 @@ pub async fn set_location() -> io::Result<()> {
             longitude: guard.location.longitude,
             altitude: guard.location.altitude,
         };
-        let response = client
-            .set_location(request)
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        let response =
+            client
+                .set_location(request)
+                .await
+                .map_err(|e| SiderealError::ServerError {
+                    reason: e.to_string(),
+                })?;
         println!("{}", response.into_inner().description);
     }
 

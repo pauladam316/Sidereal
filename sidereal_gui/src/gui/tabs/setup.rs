@@ -2,11 +2,12 @@ use iced::widget::{column, row, text};
 use iced::{Alignment, Element, Length, Task};
 
 use crate::app::Message as MainMessage;
+use crate::config::Config;
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::content_container;
 use crate::gui::styles::picklist_style::sidereal_picklist;
 use crate::gui::styles::text_input_style::sidereal_text_input;
-use crate::gui::widgets::dialog::dialog;
+use crate::model::{planetarium_handler, SiderealError, SiderealResult};
 
 #[derive(Debug, Clone)]
 pub enum Field {
@@ -30,14 +31,43 @@ pub struct SetupState {
     pub latitude: String,
     pub longitude: String,
     pub altitude: String,
-    error_message: Option<String>,
 }
 impl SetupState {
-    pub fn on_config_load(&mut self) -> () {
-        let guard = crate::config::GLOBAL_CONFIG.read().unwrap();
-        self.latitude = (&guard.location.latitude).to_string();
-        self.longitude = (&guard.location.longitude).to_string();
-        self.altitude = (&guard.location.altitude).to_string();
+    pub fn on_config_load(&mut self, config: Config) -> () {
+        self.latitude = config.location.latitude.to_string();
+        self.longitude = config.location.longitude.to_string();
+        self.altitude = config.location.altitude.to_string();
+    }
+
+    pub fn set_location(&mut self) -> Task<MainMessage> {
+        // Clone the strings outside the async block
+        let latitude = self.latitude.clone();
+        let longitude = self.longitude.clone();
+        let altitude = self.altitude.clone();
+
+        Task::perform(
+            async move {
+                let lat = latitude
+                    .parse::<f32>()
+                    .map_err(|_| SiderealError::ParseError("Invalid latitude".to_string()))?;
+                let lon = longitude
+                    .parse::<f32>()
+                    .map_err(|_| SiderealError::ParseError("Invalid longitude".to_string()))?;
+                let alt = altitude
+                    .parse::<f32>()
+                    .map_err(|_| SiderealError::ParseError("Invalid altitude".to_string()))?;
+
+                crate::config::Config::set_location(lat, lon, alt).await?;
+
+                planetarium_handler::set_location().await?;
+
+                Ok(())
+            },
+            |result: SiderealResult<()>| match result {
+                Ok(()) => MainMessage::Noop,
+                Err(e) => MainMessage::ErrorOccurred(e.to_string()),
+            },
+        )
     }
 
     pub fn update(&mut self, message: Message) -> Task<MainMessage> {
@@ -49,33 +79,7 @@ impl SetupState {
                 Field::Longitude => self.longitude = value,
                 Field::Altitude => self.altitude = value,
             },
-            Message::SetLocation {} => {
-                if let Err(msg) = self
-                    .latitude
-                    .parse::<f32>()
-                    .map_err(|_| "Invalid latitude")
-                    .and_then(|lat| {
-                        self.longitude
-                            .parse::<f32>()
-                            .map_err(|_| "Invalid longitude")
-                            .and_then(|lon| {
-                                self.altitude
-                                    .parse::<f32>()
-                                    .map_err(|_| "Invalid altitude")
-                                    .and_then(|alt| {
-                                        self.error_message = None;
-                                        crate::config::Config::set_location(lat, lon, alt)
-                                            .map_err(|_| "Failed to write location to config")
-                                    })
-                            })
-                    })
-                {
-                    return Task::perform(
-                        async move { msg.to_string() },
-                        MainMessage::ErrorOccurred,
-                    );
-                }
-            }
+            Message::SetLocation {} => return self.set_location(),
         }
         Task::none()
     }
@@ -95,7 +99,7 @@ impl SetupState {
         .placeholder("Select city")
         .width(Length::Fill);
 
-        let mut layout = column![
+        let layout = column![
             content_container(
                 row![
                     text("Server"),
