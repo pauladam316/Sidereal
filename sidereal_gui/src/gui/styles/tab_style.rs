@@ -3,7 +3,7 @@ use iced::{
     Background, Border, Color, Length, Theme,
 };
 
-use crate::styles;
+use crate::gui::styles;
 
 pub fn tab_content<'a, Message>(
     content: impl Into<iced::Element<'a, Message>>,

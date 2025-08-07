@@ -1,9 +1,9 @@
 use iced::{
-    widget::{text_input, text_input::Status, Button, TextInput},
-    Background, Border, Color, Theme,
+    widget::{text_input, text_input::Status, TextInput},
+    Background, Border, Theme,
 };
 
-use crate::styles;
+use crate::gui::styles;
 
 pub fn sidereal_text_input<'a, Message>(placeholder: &str, value: &str) -> TextInput<'a, Message>
 where

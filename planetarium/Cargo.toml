@@ -1,13 +1,16 @@
 [package]
-name = "planetarium"
-version = "0.1.0"
 edition = "2021"
+name = "planetarium"
 resolver = "2"
+version = "0.1.0"
 
 [dependencies]
-bevy = { version = "0.10", features = ["bevy_asset", "bevy_render"] }
-uuid = { version = "1.3", features = ["v4"] }
-rand = "0.8"
-byteorder = "1.4"
-chrono = "0.4.41"
-meshtext   = "0.3.1"      # ← for runtime 3D text mesh generation
+bevy = {version = "0.10", features = ["bevy_asset", "bevy_render"]} 
+byteorder = "1.4" 
+chrono = "0.4.41" 
+meshtext = "0.3.1" # ← for runtime 3D text mesh generation
+protos = {path = "../protos"} 
+rand = "0.8" 
+tokio = {version = "1", features = ["full"]} 
+tonic = {version = "0.14.0", features = ["transport"]} 
+uuid = {version = "1.3", features = ["v4"]}

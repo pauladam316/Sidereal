@@ -1,14 +1,10 @@
 use iced::{
-    widget::{
-        pick_list,
-        pick_list::{Status, Style},
-        PickList,
-    },
-    Background, Border, Color, Length, Theme,
+    widget::{pick_list, pick_list::Status, PickList},
+    Background, Border, Length, Theme,
 };
 use std::fmt::Display;
 
-use crate::styles;
+use crate::gui::styles;
 
 pub fn sidereal_picklist<'a, T, Message>(
     items: Vec<T>, // owned

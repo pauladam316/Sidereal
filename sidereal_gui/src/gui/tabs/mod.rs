@@ -1,5 +1,5 @@
-use iced::widget::{column, row, text};
-use iced::{Element, Font, Length};
+use iced::widget::{column, row};
+use iced::{Element, Length};
 
 pub mod capture;
 pub mod focus;
@@ -9,7 +9,7 @@ pub mod observatory;
 pub mod plate_solve;
 pub mod setup;
 
-use crate::styles::tab_style::tab_button;
+use crate::gui::styles::tab_style::tab_button;
 
 use self::capture::CaptureState;
 use self::focus::FocusState;

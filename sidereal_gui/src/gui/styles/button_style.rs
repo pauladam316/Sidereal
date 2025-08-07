@@ -4,7 +4,7 @@ use iced::{
     Background, Border, Color, Theme,
 };
 
-use crate::styles;
+use crate::gui::styles;
 
 pub fn sidereal_button<'a, Message>(
     content: impl Into<iced::Element<'a, Message>>,

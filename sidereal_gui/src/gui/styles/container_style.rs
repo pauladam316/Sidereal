@@ -1,9 +1,9 @@
 use iced::{
-    widget::{button, container, Button, Container},
-    Background, Border, Color, Theme,
+    widget::{container, Container},
+    Background, Color, Theme,
 };
 
-use crate::styles;
+use crate::gui::styles;
 
 pub fn content_container<'a, Message>(
     content: impl Into<iced::Element<'a, Message>>,

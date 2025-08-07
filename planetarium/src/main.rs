@@ -2,16 +2,17 @@
 // src/main.rs
 mod camera;
 mod scene;
-mod starfield;
+mod server;
 mod star_catalog;
-
-use camera::CameraPlugin;
-use bevy::prelude::*;
+mod starfield;
+use bevy::ecs::system::ParamSet; // make sure this is in scope
 use bevy::input::mouse::{MouseMotion, MouseWheel};
+use bevy::prelude::*;
 use bevy::render::mesh::shape::Quad;
+use camera::CameraPlugin;
+use protos::protos::planetarium_server::{self, PlanetariumServer};
 use rand::Rng;
 use scene::ScenePlugin;
-use bevy::ecs::system::ParamSet; // make sure this is in scope
 use starfield::StarfieldPlugin;
 #[derive(Component)]
 struct Star;
@@ -21,8 +22,22 @@ struct Star;
 struct StarDirection(Vec3);
 
 fn main() {
+    // Launch gRPC server in a separate thread
+    std::thread::spawn(|| {
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
+        rt.block_on(async {
+            server::run().await.expect("gRPC server failed");
+        });
+    });
+
+    // Launch Bevy app
     App::new()
-        .insert_resource(ClearColor(Color::RgbaLinear { red: 0.0/255.0, green: 0.0/255.0, blue: 3.0/255.0, alpha: 255.0 }))
+        .insert_resource(ClearColor(Color::RgbaLinear {
+            red: 0.0 / 255.0,
+            green: 0.0 / 255.0,
+            blue: 3.0 / 255.0,
+            alpha: 255.0,
+        }))
         .add_plugins(DefaultPlugins)
         .add_plugin(CameraPlugin)
         .add_plugin(StarfieldPlugin)
@@ -50,7 +65,6 @@ fn main() {
 //         tf.translation = cam_pos + star_dir.0 * INF_DIST;
 //     }
 // }
-
 
 // /// Rotates each quad to always face the camera
 // fn billboard_system(

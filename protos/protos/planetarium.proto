@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package planetarium;
+
+service Planetarium {
+  rpc SetLocation (SetLocationRequest) returns (SetLocationResponse);
+}
+
+message SetLocationRequest {
+  float latitude = 1;
+  float longitude = 2;
+  float altitude = 3;
+}
+
+message SetLocationResponse {
+  string description = 1;
+}
