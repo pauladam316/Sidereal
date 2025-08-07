@@ -1,13 +1,31 @@
-use protos::protos::planetarium_server::{Planetarium, PlanetariumServer};
-use protos::protos::{SetLocationRequest, SetLocationResponse};
+// src/server.rs
+
+use std::sync::mpsc::Sender;
 use tonic::{transport::Server, Request, Response, Status};
 
-#[derive(Default)]
-pub struct MyPlanetariumServer {} // renamed for clarity
+use protos::protos::planetarium_server::{Planetarium, PlanetariumServer};
+use protos::protos::{SetLocationRequest, SetLocationResponse};
 
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
+use crate::starfield::SetLocationEvent;
+
+/// Our gRPC service, holding the channel sender
+#[derive(Clone)]
+pub struct MyPlanetariumServer {
+    location_sender: Sender<SetLocationEvent>,
+}
+
+impl MyPlanetariumServer {
+    pub fn new(location_sender: Sender<SetLocationEvent>) -> Self {
+        Self { location_sender }
+    }
+}
+
+/// Launch the gRPC server, giving it the channel sender.
+pub async fn run(
+    location_sender: Sender<SetLocationEvent>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
-    let service = MyPlanetariumServer::default();
+    let service = MyPlanetariumServer::new(location_sender);
 
     println!("gRPC server listening on {}", addr);
 
@@ -27,10 +45,22 @@ impl Planetarium for MyPlanetariumServer {
     ) -> Result<Response<SetLocationResponse>, Status> {
         let contents = request.into_inner();
 
+        // Build the event
+        let evt = SetLocationEvent {
+            lat_deg: contents.latitude as f64,
+            lon_deg: contents.longitude as f64,
+        };
+
+        // Send it into your Bevy channel
+        self.location_sender
+            .send(evt)
+            .map_err(|e| Status::internal(format!("Channel send error: {}", e)))?;
+
+        // Reply to the gRPC client
         let reply = SetLocationResponse {
             description: format!(
-                "{} {} {}",
-                contents.latitude, contents.longitude, contents.altitude,
+                "Location set: lat={}°, lon={}°",
+                contents.latitude, contents.longitude
             ),
         };
         Ok(Response::new(reply))

@@ -5,6 +5,7 @@ mod scene;
 mod server;
 mod star_catalog;
 mod starfield;
+use crate::starfield::{rotate_starfield_system, SetLocationEvent};
 use bevy::ecs::system::ParamSet; // make sure this is in scope
 use bevy::input::mouse::{MouseMotion, MouseWheel};
 use bevy::prelude::*;
@@ -14,6 +15,9 @@ use protos::protos::planetarium_server::{self, PlanetariumServer};
 use rand::Rng;
 use scene::ScenePlugin;
 use starfield::StarfieldPlugin;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::Mutex;
+
 #[derive(Component)]
 struct Star;
 
@@ -21,16 +25,21 @@ struct Star;
 #[derive(Component)]
 struct StarDirection(Vec3);
 
+#[derive(Resource)]
+struct LocationChannelReceiver(pub Mutex<Receiver<SetLocationEvent>>);
+
 fn main() {
-    // Launch gRPC server in a separate thread
-    std::thread::spawn(|| {
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
-        rt.block_on(async {
-            server::run().await.expect("gRPC server failed");
+    // build the std channel
+    let (loc_tx, loc_rx): (Sender<SetLocationEvent>, Receiver<SetLocationEvent>) = channel();
+
+    // spawn gRPC server, handing off loc_tx…
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            server::run(loc_tx).await.expect("gRPC server failed");
         });
     });
 
-    // Launch Bevy app
     App::new()
         .insert_resource(ClearColor(Color::RgbaLinear {
             red: 0.0 / 255.0,
@@ -38,13 +47,25 @@ fn main() {
             blue: 3.0 / 255.0,
             alpha: 255.0,
         }))
+        .insert_resource(LocationChannelReceiver(Mutex::new(loc_rx)))
         .add_plugins(DefaultPlugins)
         .add_plugin(CameraPlugin)
         .add_plugin(StarfieldPlugin)
         .add_plugin(ScenePlugin)
+        .add_system(location_channel_listener_system)
         .run();
 }
-
+fn location_channel_listener_system(
+    loc_rx: Res<LocationChannelReceiver>,
+    mut ev: EventWriter<SetLocationEvent>,
+) {
+    // lock *briefly*
+    if let Ok(mut receiver) = loc_rx.0.lock() {
+        while let Ok(evt) = receiver.try_recv() {
+            ev.send(evt);
+        }
+    }
+}
 // /// Re‐position each star at “infinite” distance along its direction
 // fn star_infinity_system(
 //     mut params: ParamSet<(

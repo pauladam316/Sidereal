@@ -27,8 +27,8 @@ fn spawn_and_detach(path: &str) -> io::Result<Child> {
     let mut binding = Command::new(path);
     let cmd = binding
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
 
     #[cfg(unix)]
     {
