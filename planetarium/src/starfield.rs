@@ -1,6 +1,6 @@
 // src/starfield.rs
 
-use bevy::{ecs::query::QuerySingleError, prelude::*, render::mesh::shape::Quad};
+use bevy::prelude::*;
 use chrono::{DateTime, Utc};
 use rand::Rng;
 use std::{f64::consts::PI, path::PathBuf, time::Instant};
@@ -16,16 +16,17 @@ pub struct StarfieldRoot;
 pub struct StarData {
     pub ra: f64,
     pub dec: f64,
-    pub magnitude: f32,
 }
 
 /// Events you can send at ANY TIME to jump the sky:
+#[derive(Event)]
 pub struct SetLocationEvent {
     /// degrees north positive
     pub lat_deg: f64,
     /// degrees east positive
     pub lon_deg: f64,
 }
+#[derive(Event)]
 pub struct SetTimeEvent {
     pub time: DateTime<Utc>,
 }
@@ -69,18 +70,22 @@ pub struct StarfieldPlugin;
 impl Plugin for StarfieldPlugin {
     fn build(&self, app: &mut App) {
         app
-            // register our events
+            // events
             .add_event::<SetLocationEvent>()
             .add_event::<SetTimeEvent>()
-            // initial spawn
-            .add_startup_system(spawn_starfield)
-            // handle any runtime jumps
-            .add_system(handle_set_location_events)
-            .add_system(handle_set_time_events)
-            // per-frame updates
-            .add_system(rotate_starfield_system.before(billboard_system))
-            .add_system(starfield_follow_camera.before(rotate_starfield_system))
-            .add_system(billboard_system);
+            // startup
+            .add_systems(Startup, spawn_starfield)
+            // runtime event handlers
+            .add_systems(Update, (handle_set_location_events, handle_set_time_events))
+            // per-frame with ordering: follow_cam → rotate → billboard
+            .add_systems(
+                Update,
+                (
+                    starfield_follow_camera,
+                    rotate_starfield_system.after(starfield_follow_camera),
+                    billboard_system.after(rotate_starfield_system),
+                ),
+            );
     }
 }
 
@@ -161,15 +166,17 @@ fn spawn_starfield(
         rate,
     });
 
-    // prepare quad & texture
-    let quad = meshes.add(Mesh::from(Quad::new(Vec2::splat(1.0))));
+    let quad = meshes.add(Mesh::from(Rectangle::new(1.0, 1.0)));
     let texture = assets.load("star.png");
 
     // spawn a single root
     let root = commands
-        .spawn((SpatialBundle::default(), StarfieldRoot))
+        .spawn((
+            Transform::default(),  // position/rotation/scale
+            Visibility::default(), // visible by default
+            StarfieldRoot,
+        ))
         .id();
-
     // now spawn each star as its child
     let mut rng = rand::thread_rng();
     for star in stars {
@@ -178,12 +185,12 @@ fn spawn_starfield(
         let scale = magnitude_to_scale(star.magnitudes[0]);
         let t: f32 = rng.gen();
         let mix = Vec3::new(1.0, 0.8, 0.6).lerp(Vec3::new(0.6, 0.8, 1.0), t);
-        let color = Color::rgb_linear(mix.x, mix.y, mix.z) * 100.0;
+        let color = Color::linear_rgb(mix.x * 100.0, mix.y * 100.0, mix.z * 100.0);
 
         let mat = mats.add(StandardMaterial {
             base_color_texture: Some(texture.clone()),
             base_color: color,
-            emissive: color,
+            emissive: color.into(),
             alpha_mode: AlphaMode::Add,
             unlit: true,
             ..default()
@@ -191,20 +198,17 @@ fn spawn_starfield(
 
         commands.entity(root).with_children(|p| {
             p.spawn((
-                PbrBundle {
-                    mesh: quad.clone(),
-                    material: mat,
-                    transform: Transform {
-                        translation: pos,
-                        scale: Vec3::splat(scale),
-                        ..Default::default()
-                    },
-                    ..default()
+                Mesh3d(quad.clone()),        // mesh handle
+                MeshMaterial3d(mat.clone()), // material handle
+                Transform {
+                    translation: pos,
+                    scale: Vec3::splat(scale),
+                    ..Default::default()
                 },
+                Visibility::default(), // ensures the entity is rendered
                 StarData {
                     ra: star.ra,
                     dec: star.dec,
-                    magnitude: star.magnitudes[0],
                 },
             ));
         });
@@ -212,20 +216,21 @@ fn spawn_starfield(
 }
 
 /// When you send a SetLocationEvent, recompute `axis` **and** every star’s base position
-fn handle_set_location_events(
+pub fn handle_set_location_events(
     mut ev: EventReader<SetLocationEvent>,
     mut state: ResMut<StarfieldState>,
-    mut q: Query<(&StarData, &mut Transform), Without<Camera>>,
+    mut q: Query<(&StarData, &mut Transform), Without<Camera3d>>,
 ) {
-    for SetLocationEvent { lat_deg, lon_deg } in ev.iter() {
+    for SetLocationEvent { lat_deg, lon_deg } in ev.read() {
         // update state
         state.lat_deg = *lat_deg;
         state.lon_deg = *lon_deg;
+
         let lr = lat_deg.to_radians();
         state.axis = Vec3::new(0.0, lr.sin() as f32, lr.cos() as f32);
 
         // recompute every star’s initial translation
-        for (data, mut tf) in q.iter_mut() {
+        for (data, mut tf) in &mut q {
             let dir = star_direction(
                 state.spawn_utc,
                 state.lat_deg.to_radians(),
@@ -240,7 +245,7 @@ fn handle_set_location_events(
 
 /// When you send a SetTimeEvent, jump the rotation to that UTC
 fn handle_set_time_events(mut ev: EventReader<SetTimeEvent>, mut state: ResMut<StarfieldState>) {
-    for SetTimeEvent { time } in ev.iter() {
+    for SetTimeEvent { time } in ev.read() {
         // how many seconds since spawn?
         let delta_s = (time
             .signed_duration_since(state.spawn_utc)
@@ -254,13 +259,12 @@ fn handle_set_time_events(mut ev: EventReader<SetTimeEvent>, mut state: ResMut<S
 
 /// Each frame: rotate the root by (base_angle + rate * elapsed_since_base)
 pub fn rotate_starfield_system(
-    time: Res<Time>,
     state: Res<StarfieldState>,
     mut q: Query<&mut Transform, With<StarfieldRoot>>,
 ) {
     let elapsed = state.base_instant.elapsed().as_secs_f32();
     let angle = state.base_angle + state.rate * elapsed;
-    let mut tf = q.single_mut();
+    let mut tf = q.single_mut().unwrap();
     tf.rotation = Quat::from_axis_angle(state.axis, -angle);
 }
 
@@ -270,7 +274,7 @@ fn starfield_follow_camera(
     mut star_q: Query<&mut Transform, With<StarfieldRoot>>,
 ) {
     // Try to grab exactly one camera; if it’s not there yet, just return.
-    let cam_tf = match cam_q.get_single() {
+    let cam_tf = match cam_q.single() {
         Ok(tf) => tf,
         Err(_) => return, // no camera spawned yet
     };
@@ -283,15 +287,28 @@ fn starfield_follow_camera(
 /// Billboarding: make every star quad face the camera
 fn billboard_system(
     cam_q: Query<&GlobalTransform, With<Camera>>,
+    root_q: Query<&GlobalTransform, With<StarfieldRoot>>,
     mut stars: Query<&mut Transform, With<StarData>>,
 ) {
-    let cam_tf = match cam_q.get_single() {
+    // Fetch the camera's world rotation
+    let cam_tf = match cam_q.single() {
         Ok(tf) => tf,
-        Err(_) => return, // no camera spawned yet
+        Err(_) => return, // no camera yet
     };
-
     let cam_rot = cam_tf.compute_transform().rotation;
+
+    // Fetch the starfield root's world rotation
+    let root_tf = match root_q.single() {
+        Ok(tf) => tf,
+        Err(_) => return, // root not spawned yet
+    };
+    let root_rot = root_tf.compute_transform().rotation;
+
+    // Compute the local rotation that cancels out the root spin and applies the camera's orientation
+    let local_rot = root_rot.inverse() * cam_rot;
+
+    // Apply to every star quad
     for mut tf in stars.iter_mut() {
-        tf.rotation = cam_rot;
+        tf.rotation = local_rot;
     }
 }

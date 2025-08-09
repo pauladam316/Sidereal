@@ -1,13 +1,14 @@
-use bevy::prelude::*;
-use meshtext::{MeshGenerator, MeshText, TextSection};
+use bevy::asset::RenderAssetUsages;
 use bevy::render::mesh::Mesh;
+use bevy::{prelude::*, render::mesh::PrimitiveTopology};
+use meshtext::{MeshGenerator, MeshText, TextSection};
 
 pub struct ScenePlugin;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        app.add_startup_system(spawn_ground)
-        .add_system(billboard_labels);
+        app.add_systems(Startup, spawn_ground)
+            .add_systems(Update, billboard_labels);
     }
 }
 
@@ -20,59 +21,58 @@ fn spawn_ground(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // 1) Ground plane
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(
-            Mesh::from(shape::Plane {
-                size: 100000.0,
-                subdivisions: 1,
-            })
-        ),
-        material: materials.add(StandardMaterial {
-            base_color:           Color::rgb(0.1, 0.4, 0.1),
-            perceptual_roughness: 1.0,
-            ..default()
-        }),
-        transform: Transform::from_xyz(0.0, -5.0, 0.0),
+    let plane = meshes.add(Plane3d::new(Vec3::Y, Vec2::splat(100_000.0)));
+    let material = materials.add(StandardMaterial {
+        base_color: Color::srgb(0.1, 0.4, 0.1),
+        perceptual_roughness: 1.0,
         ..default()
     });
 
+    commands.spawn((
+        Mesh3d(plane),
+        MeshMaterial3d(material),
+        Transform::from_xyz(0.0, -5.0, 0.0),
+        Visibility::default(),
+    ));
+
     // 2) Directional light
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance:     10_000.0,
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 10_000.0,
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform {
-            translation: Vec3::new(0.0, 100.0, 0.0),
-            rotation:    Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
-            ..default()
-        },
-        ..default()
-    });
+        Transform::from_translation(Vec3::new(0.0, 100.0, 0.0))
+            .with_rotation(Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4)),
+        Visibility::default(),
+    ));
 
     // 3) Prepare the meshtext generator
     let font_data = include_bytes!("../assets/SwanseaBoldItalic-p3Dv.ttf");
     let mut generator = MeshGenerator::new(font_data);
 
     // scale for text size
-    let text_scale = 25.0_f32; 
+    let text_scale = 25.0_f32;
     let transform_array = Mat4::from_scale(Vec3::splat(text_scale)).to_cols_array();
 
     // 4) Cardinal markers: (label, position)
-    let height = 10.0;    // slightly above the plane
-    let dist   = 2000.0; // radius
+    let height = 10.0; // slightly above the plane
+    let dist = 2000.0; // radius
     let markers = [
-        ("N", Vec3::new(  0.0, height,  dist)),
-        ("S", Vec3::new(  0.0, height, -dist)),
-        ("E", Vec3::new( -dist, height,   0.0)),
-        ("W", Vec3::new(dist, height,   0.0)),
+        ("N", Vec3::new(0.0, height, dist)),
+        ("S", Vec3::new(0.0, height, -dist)),
+        ("E", Vec3::new(-dist, height, 0.0)),
+        ("W", Vec3::new(dist, height, 0.0)),
     ];
 
     for (label, pos) in markers.iter() {
         // generate a MeshText for this single character
         let text_mesh: MeshText = generator
-            .generate_section(&label.to_string(), /* centered */ true, Some(&transform_array))
+            .generate_section(
+                &label.to_string(),
+                /* centered */ true,
+                Some(&transform_array),
+            )
             .unwrap();
 
         // extract vertex positions & UVs
@@ -84,27 +84,31 @@ fn spawn_ground(
         let uvs = vec![[0.0, 0.0]; positions.len()];
 
         // build a Bevy mesh
-        let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::RENDER_WORLD, // or MAIN_WORLD | RENDER_WORLD if you also need CPU-side access
+        );
+
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        // mesh.insert_indices(Indices::U32(indices));
         mesh.compute_flat_normals();
 
         // add it to assets and spawn
         let mesh_handle = meshes.add(mesh);
-        let mat_handle  = materials.add(StandardMaterial {
+        let mat_handle = materials.add(StandardMaterial {
             base_color: Color::WHITE,
-            unlit:      true,
+            unlit: true,
             ..default()
         });
 
-        commands
-            .spawn(PbrBundle {
-                mesh:      mesh_handle,
-                material:  mat_handle,
-                transform: Transform::from_translation(*pos),
-                ..default()
-            })
-            .insert(GroundLabel);
+        commands.spawn((
+            Mesh3d(mesh_handle),
+            MeshMaterial3d(mat_handle),
+            Transform::from_translation(*pos),
+            Visibility::default(),
+            GroundLabel,
+        ));
     }
 }
 
@@ -114,7 +118,7 @@ fn billboard_labels(
     cam_q: Query<&Transform, (With<Camera3d>, Without<GroundLabel>)>,
     mut q: Query<&mut Transform, With<GroundLabel>>,
 ) {
-    let cam_tf = match cam_q.get_single() {
+    let cam_tf = match cam_q.single() {
         Ok(tf) => tf,
         Err(_) => return,
     };

@@ -1,5 +1,5 @@
+use bevy::input::mouse::{AccumulatedMouseMotion, MouseWheel};
 use bevy::prelude::*;
-use bevy::input::mouse::{MouseMotion, MouseWheel};
 
 #[derive(Component)]
 pub struct RotatingCamera {
@@ -8,66 +8,62 @@ pub struct RotatingCamera {
 }
 
 pub struct CameraPlugin;
-
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_startup_system(setup_camera)
-            .add_system(camera_rotation_system)
-            .add_system(camera_zoom_system)
-            .add_system(update_camera_transform_system);
+        app.add_systems(Startup, setup_camera)
+            .add_systems(Update, (camera_rotation_system, camera_zoom_system));
     }
 }
 
-/// Setup the camera with default position and rotation tracking
 pub fn setup_camera(mut commands: Commands) {
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::default(),
+        Camera3d::default(),
+        Projection::from(PerspectiveProjection {
+            fov: 60.0_f32.to_radians(),
             ..default()
+        }),
+        Transform::IDENTITY, // at origin
+        RotatingCamera {
+            yaw: 0.0,
+            pitch: 0.0,
         },
-        RotatingCamera { yaw: 0.0, pitch: 0.0 },
     ));
 }
 
-/// Mouse input to rotate the camera
+// Rotate camera in place (origin) on drag
 pub fn camera_rotation_system(
-    mut motion_evr: EventReader<MouseMotion>,
-    mouse_button: Res<Input<MouseButton>>,
-    mut query: Query<&mut RotatingCamera>,
+    accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut q: Query<(&mut RotatingCamera, &mut Transform), With<Camera3d>>,
 ) {
-    if mouse_button.pressed(MouseButton::Left) {
-        let mut camera = query.single_mut();
-        for ev in motion_evr.iter() {
-            camera.yaw += ev.delta.x * 0.003;
-            camera.pitch = (camera.pitch + ev.delta.y * 0.003).clamp(-1.54, 1.54);
-        }
+    if !mouse_buttons.pressed(MouseButton::Left) {
+        return;
     }
+
+    let (mut rc, mut t) = q.single_mut().unwrap();
+    let d = accumulated_mouse_motion.delta;
+    if d == Vec2::ZERO {
+        return;
+    }
+
+    // FPS-style: move mouse right → look right; move up → look up
+    rc.yaw += d.x * 0.003;
+    rc.pitch += d.y * 0.003;
+    rc.pitch = rc.pitch.clamp(-1.54, 1.54);
+
+    // Apply rotation (yaw around Y, then pitch around X)
+    t.rotation = Quat::from_euler(EulerRot::YXZ, rc.yaw, rc.pitch, 0.0);
 }
 
-/// Scroll to zoom the camera by modifying FOV
+// Mouse wheel → FOV zoom (perspective only)
 pub fn camera_zoom_system(
-    mut scroll_evr: EventReader<MouseWheel>,
-    mut query: Query<&mut Projection, With<Camera>>,
+    mut wheel: EventReader<MouseWheel>,
+    mut proj: Query<&mut Projection, With<Camera3d>>,
 ) {
-    for mut projection in query.iter_mut() {
-        if let Projection::Perspective(ref mut perspective) = *projection {
-            for ev in scroll_evr.iter() {
-                perspective.fov = (perspective.fov - ev.y * 0.05)
-                    .clamp(0.1, std::f32::consts::PI - 0.01);
-            }
+    let mut projection = proj.single_mut().unwrap();
+    if let Projection::Perspective(ref mut p) = *projection {
+        for ev in wheel.read() {
+            p.fov = (p.fov - ev.y * 0.05).clamp(0.1, std::f32::consts::PI - 0.01);
         }
     }
-}
-
-/// Apply yaw/pitch rotation to camera transform
-pub fn update_camera_transform_system(
-    mut query: Query<(&RotatingCamera, &mut Transform)>
-) {
-    let (camera, mut transform) = query.single_mut();
-    transform.translation = Vec3::ZERO;
-
-    let yaw = Quat::from_rotation_y(camera.yaw);
-    let pitch = Quat::from_rotation_x(camera.pitch);
-    transform.rotation = yaw * pitch;
 }

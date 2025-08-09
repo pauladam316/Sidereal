@@ -1,9 +1,9 @@
+use byteorder::{LittleEndian, ReadBytesExt};
 use std::{
     fs::File,
     io::{self, BufReader, Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
-use byteorder::{LittleEndian, ReadBytesExt};
 
 /// Epoch flag inferred if either `starn` or `nmag` is negative.
 #[derive(Debug, Clone, Copy)]
@@ -15,13 +15,13 @@ pub enum Epoch {
 #[derive(Debug)]
 pub struct CatalogHeader {
     pub star0: i32,
-    pub star1: i32,
-    pub starn: i32,
+    pub _star1: i32,
+    pub _starn: i32,
     pub stnum: i32,
     pub mprop: i32,
     pub nmag: i32,
     pub nbent: i32,
-    pub epoch: Epoch,
+    pub _epoch: Epoch,
 }
 
 #[derive(Debug)]
@@ -35,16 +35,16 @@ pub enum StarId {
 /// one star entry
 #[derive(Debug)]
 pub struct StarEntry {
-    pub sequence: i32,           // = raw_id - star0
-    pub id: Option<StarId>,      // None if stnum == 0 or stnum < 0
-    pub ra: f64,                 // radians
-    pub dec: f64,                // radians
-    pub spectral_type: String,   // 2‐char ASCII
-    pub magnitudes: Vec<f32>,    // each = raw_mag / 100.0
-    pub proper_motion_ra:  Option<f32>,
-    pub proper_motion_dec: Option<f32>,
-    pub radial_velocity:     Option<f64>,
-    pub name:                Option<String>, // only if stnum < 0
+    pub _sequence: i32,         // = raw_id - star0
+    pub _id: Option<StarId>,    // None if stnum == 0 or stnum < 0
+    pub ra: f64,                // radians
+    pub dec: f64,               // radians
+    pub _spectral_type: String, // 2‐char ASCII
+    pub magnitudes: Vec<f32>,   // each = raw_mag / 100.0
+    pub _proper_motion_ra: Option<f32>,
+    pub _proper_motion_dec: Option<f32>,
+    pub _radial_velocity: Option<f64>,
+    pub _name: Option<String>, // only if stnum < 0
 }
 
 pub fn parse_catalog(path: PathBuf) -> io::Result<(CatalogHeader, Vec<StarEntry>)> {
@@ -53,30 +53,30 @@ pub fn parse_catalog(path: PathBuf) -> io::Result<(CatalogHeader, Vec<StarEntry>
 
     // 1) Read header
     let star0 = reader.read_i32::<LittleEndian>()?;
-    let star1 = reader.read_i32::<LittleEndian>()?;
-    let starn = reader.read_i32::<LittleEndian>()?;
+    let _star1 = reader.read_i32::<LittleEndian>()?;
+    let _starn = reader.read_i32::<LittleEndian>()?;
     let stnum = reader.read_i32::<LittleEndian>()?;
     let mprop = reader.read_i32::<LittleEndian>()?;
     let nmag_raw = reader.read_i32::<LittleEndian>()?;
     let nbent = reader.read_i32::<LittleEndian>()?;
 
-    let epoch = if starn < 0 || nmag_raw < 0 {
+    let _epoch = if _starn < 0 || nmag_raw < 0 {
         Epoch::J2000
     } else {
         Epoch::B1950
     };
     let nmag = nmag_raw.abs();
-    let star_count = starn.abs() as usize;
+    let star_count = _starn.abs() as usize;
 
     let header = CatalogHeader {
         star0,
-        star1,
-        starn,
+        _star1,
+        _starn,
         stnum,
         mprop,
         nmag,
         nbent,
-        epoch,
+        _epoch,
     };
 
     // 2) Read each star
@@ -88,10 +88,7 @@ pub fn parse_catalog(path: PathBuf) -> io::Result<(CatalogHeader, Vec<StarEntry>
     Ok((header, stars))
 }
 
-fn read_star<R: Read + Seek>(
-    reader: &mut R,
-    hdr: &CatalogHeader,
-) -> io::Result<StarEntry> {
+fn read_star<R: Read + Seek>(reader: &mut R, hdr: &CatalogHeader) -> io::Result<StarEntry> {
     // mark start so we can skip to exactly nbent bytes
     let start = reader.stream_position()?;
 
@@ -116,7 +113,7 @@ fn read_star<R: Read + Seek>(
     });
 
     // 2) coordinates
-    let ra  = reader.read_f64::<LittleEndian>()?;
+    let ra = reader.read_f64::<LittleEndian>()?;
     let dec = reader.read_f64::<LittleEndian>()?;
 
     // 3) spectral type (2 ASCII chars)
@@ -153,7 +150,11 @@ fn read_star<R: Read + Seek>(
         let name_len = (-hdr.stnum) as usize;
         let mut buf = vec![0u8; name_len];
         reader.read_exact(&mut buf)?;
-        Some(String::from_utf8_lossy(&buf).trim_end_matches('\0').to_string())
+        Some(
+            String::from_utf8_lossy(&buf)
+                .trim_end_matches('\0')
+                .to_string(),
+        )
     } else {
         None
     };
@@ -167,15 +168,15 @@ fn read_star<R: Read + Seek>(
     }
 
     Ok(StarEntry {
-        sequence:         seq,
-        id:               raw_id,
+        _sequence: seq,
+        _id: raw_id,
         ra,
         dec,
-        spectral_type,
+        _spectral_type: spectral_type,
         magnitudes,
-        proper_motion_ra: pm_ra,
-        proper_motion_dec: pm_dec,
-        radial_velocity:   vel,
-        name,
+        _proper_motion_ra: pm_ra,
+        _proper_motion_dec: pm_dec,
+        _radial_velocity: vel,
+        _name: name,
     })
 }
