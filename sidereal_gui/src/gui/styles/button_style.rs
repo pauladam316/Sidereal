@@ -47,3 +47,87 @@ where
             }
         })
 }
+
+pub fn track_button<'a, Message>(
+    content: impl Into<iced::Element<'a, Message>>,
+) -> Button<'a, Message>
+where
+    Message: 'a + Clone,
+{
+    button(content)
+        .padding([6, 12])
+        .style(move |_theme: &Theme, status| {
+            let hovered = matches!(status, Status::Hovered);
+            iced::widget::button::Style {
+                background: Some(Background::Color(styles::TRACK_BUTTON_COLOR)),
+
+                text_color: if hovered {
+                    styles::ACCENT_COLOR
+                } else {
+                    styles::TEXT_COLOR
+                },
+
+                shadow: iced::Shadow {
+                    offset: iced::Vector::new(1.0, 1.0),
+                    color: Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.2,
+                    }, // soft drop shadow
+                    blur_radius: 3.0,
+                },
+                border: Border {
+                    color: if hovered {
+                        styles::ACCENT_COLOR
+                    } else {
+                        styles::TRACK_BUTTON_BORDER
+                    },
+                    width: 2.0,
+                    radius: 20.0.into(),
+                },
+            }
+        })
+}
+
+pub fn stop_track_button<'a, Message>(
+    content: impl Into<iced::Element<'a, Message>>,
+) -> Button<'a, Message>
+where
+    Message: 'a + Clone,
+{
+    button(content)
+        .padding([6, 12])
+        .style(move |_theme: &Theme, status| {
+            let hovered = matches!(status, Status::Hovered);
+            iced::widget::button::Style {
+                background: Some(Background::Color(styles::STOP_TRACK_BUTTON_COLOR)),
+
+                text_color: if hovered {
+                    styles::ACCENT_COLOR
+                } else {
+                    styles::TEXT_COLOR
+                },
+
+                shadow: iced::Shadow {
+                    offset: iced::Vector::new(1.0, 1.0),
+                    color: Color {
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.2,
+                    }, // soft drop shadow
+                    blur_radius: 3.0,
+                },
+                border: Border {
+                    color: if hovered {
+                        styles::ACCENT_COLOR
+                    } else {
+                        styles::STOP_TRACK_BUTTON_BORDER
+                    },
+                    width: 2.0,
+                    radius: 20.0.into(),
+                },
+            }
+        })
+}

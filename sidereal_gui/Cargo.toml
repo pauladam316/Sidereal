@@ -6,8 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 dirs-next = "2.0"
-iced = {version = "0.13.1", features = ["tokio", "image"]}# or latest; choose backend you want
+iced = {version = "0.13.1", features = ["tokio", "image", "canvas"]}# or latest; choose backend you want
 iced_dialog = "0.13.0"
+indi = "5.0.1"
 once_cell = "1.21.3"
 protos = {path = "../protos"}
 serde = {version = "1.0.219", features = ["derive"]}

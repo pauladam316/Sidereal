@@ -89,13 +89,10 @@ pub async fn set_location() -> SiderealResult<()> {
             longitude: guard.location.longitude,
             altitude: guard.location.altitude,
         };
-        let response =
-            client
-                .set_location(request)
-                .await
-                .map_err(|e| SiderealError::ServerError {
-                    reason: e.to_string(),
-                })?;
+        let response = client
+            .set_location(request)
+            .await
+            .map_err(|e| SiderealError::ServerError(e.to_string()))?;
         println!("{}", response.into_inner().description);
     }
 

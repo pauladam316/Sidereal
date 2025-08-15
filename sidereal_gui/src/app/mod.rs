@@ -1,4 +1,5 @@
 use crate::gui::styles::button_style::sidereal_button;
+use crate::gui::tabs::mount;
 use crate::gui::widgets::dialog::dialog;
 use crate::model::planetarium_handler;
 use crate::{
@@ -51,8 +52,19 @@ impl MainWindow {
         (app, config_load_task)
     }
 
+    fn subscription(&self) -> iced::Subscription<Message> {
+        // Get the mount tab's subscription (it returns Subscription<MountMsg>)
+        let mount_sub: iced::Subscription<mount::Message> = self.state.mount.subscription();
+
+        // Map it into your app-wide Message type
+        let mount_sub_mapped: iced::Subscription<Message> = mount_sub.map(Message::Mount);
+
+        iced::Subscription::batch([mount_sub_mapped])
+    }
+
     pub fn run(settings: iced::Settings) -> iced::Result {
         let result = iced::application("Sidereal GUI", Self::update, Self::view)
+            .subscription(|app: &MainWindow| app.subscription())
             .theme(|_| SIDEREAL_THEME.clone())
             .settings(settings)
             .window_size(iced::Size::new(1200.0, 900.0))
@@ -70,7 +82,7 @@ impl MainWindow {
                 return self.state.setup.update(msg);
             }
             Message::Mount(msg) => {
-                self.state.mount.update(msg);
+                return self.state.mount.update(msg);
             }
             Message::Observatory(msg) => {
                 self.state.observatory.update(msg);

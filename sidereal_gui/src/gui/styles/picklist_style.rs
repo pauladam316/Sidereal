@@ -20,8 +20,7 @@ where
         .width(Length::Fill)
         .style(move |_: &Theme, status: Status| {
             let hovered = matches!(status, Status::Hovered);
-            let active = selected.is_some();
-            let is_highlighted = active || hovered;
+            let is_highlighted = hovered;
 
             iced::widget::pick_list::Style {
                 background: Background::Color(styles::BUTTON_COLOR),

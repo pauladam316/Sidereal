@@ -4,10 +4,10 @@ use iced::{Alignment, Element, Length, Task};
 use crate::app::Message as MainMessage;
 use crate::config::Config;
 use crate::gui::styles::button_style::sidereal_button;
-use crate::gui::styles::container_style::content_container;
+use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::styles::picklist_style::sidereal_picklist;
 use crate::gui::styles::text_input_style::sidereal_text_input;
-use crate::model::{planetarium_handler, SiderealError, SiderealResult};
+use crate::model::{indi_server_handler, planetarium_handler, SiderealError, SiderealResult};
 
 #[derive(Debug, Clone)]
 pub enum Field {
@@ -22,11 +22,12 @@ pub enum Message {
     SelectCity(&'static str),
     FieldChanged { field: Field, value: String },
     SetLocation,
+    ConnectToServer,
 }
 
 #[derive(Default)]
 pub struct SetupState {
-    favorite: Option<&'static str>,
+    server_ip: Option<&'static str>,
     favorite_city: Option<&'static str>,
     pub latitude: String,
     pub longitude: String,
@@ -72,7 +73,7 @@ impl SetupState {
 
     pub fn update(&mut self, message: Message) -> Task<MainMessage> {
         match message {
-            Message::SelectServer(_) => todo!(),
+            Message::SelectServer(server_ip) => self.server_ip = Some(server_ip),
             Message::SelectCity(_) => todo!(),
             Message::FieldChanged { field, value } => match field {
                 Field::Latitude => self.latitude = value,
@@ -80,14 +81,28 @@ impl SetupState {
                 Field::Altitude => self.altitude = value,
             },
             Message::SetLocation {} => return self.set_location(),
+            Message::ConnectToServer => {
+                let ip = self.server_ip.clone();
+                return Task::perform(
+                    async move {
+                        indi_server_handler::connect_to_server(ip.ok_or("No server IP selected")?)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| match result {
+                        Ok(_) => MainMessage::Noop,
+                        Err(e) => MainMessage::ErrorOccurred(e),
+                    },
+                );
+            }
         }
         Task::none()
     }
     pub fn view(&self) -> Element<Message> {
-        let server_ips: [&'static str; 1] = ["192.168.5.1"];
+        let server_ips: [&'static str; 2] = ["127.0.0.1:7624", "test"];
         let cities: [&'static str; 1] = ["Arlington, VA"];
 
-        let pick = sidereal_picklist(server_ips.to_vec(), self.favorite, |m| {
+        let pick = sidereal_picklist(server_ips.to_vec(), self.server_ip, |m| {
             Message::SelectServer(m)
         })
         .placeholder("Select server")
@@ -105,10 +120,11 @@ impl SetupState {
                     text("Server"),
                     pick,
                     sidereal_button(text("Add")).on_press(Message::SelectServer("placeholder")),
-                    sidereal_button(text("Connect")).on_press(Message::SelectServer("placeholder"))
+                    sidereal_button(text("Connect")).on_press(Message::ConnectToServer)
                 ]
                 .align_y(Alignment::Center)
                 .spacing(10),
+                ContainerLayer::Layer1,
             )
             .padding(10),
             content_container(
@@ -144,7 +160,8 @@ impl SetupState {
                     .align_y(Alignment::Center)
                     .spacing(10),
                 ]
-                .spacing(10)
+                .spacing(10),
+                ContainerLayer::Layer1
             )
             .padding(10)
         ]

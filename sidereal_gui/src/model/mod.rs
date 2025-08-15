@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+pub(crate) mod indi_server_handler;
 pub(crate) mod planetarium_handler;
 
 pub type SiderealResult<T> = Result<T, SiderealError>;
@@ -7,10 +8,10 @@ pub type SiderealResult<T> = Result<T, SiderealError>;
 #[derive(Error, Debug, Clone)]
 
 pub enum SiderealError {
-    #[error("ServerError: {reason}")]
-    ServerError { reason: String },
     #[error("ConfigError: {reason}")]
     ConfigError { reason: String },
     #[error("ParseError: {0}")]
     ParseError(String),
+    #[error("ServerError: {0}")]
+    ServerError(String),
 }
