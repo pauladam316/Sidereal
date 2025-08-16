@@ -2,6 +2,7 @@ use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::widgets::dialog::dialog;
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
+use crate::gui::widgets::video::{IpCamera, IpCameraMessage};
 use crate::model::indi_server_handler::param_watcher;
 use crate::model::{planetarium_handler, SiderealError};
 use crate::{
@@ -35,6 +36,7 @@ pub enum Message {
     ServerStatus(ServerStatus),
     ConnectedDeviceChange(ConnectedDevices),
     IndiError(String),
+    Camera(IpCameraMessage),
 }
 #[derive(Debug, Clone, Default)]
 pub struct ConnectedDevices {
@@ -49,6 +51,7 @@ pub struct MainWindow {
     error_message: Option<String>,
     server_status: ServerStatus,
     connected_devices: ConnectedDevices,
+    camera: IpCamera,
 }
 
 impl MainWindow {
@@ -65,8 +68,13 @@ impl MainWindow {
         (app, config_load_task)
     }
 
-    fn subscription(&self) -> iced::Subscription<Message> {
-        Subscription::run_with_id("coords_subscription", param_watcher())
+    fn subscription(&self) -> Subscription<Message> {
+        Subscription::batch(vec![
+            // your existing stream
+            Subscription::run_with_id("coords_subscription", param_watcher()),
+            // the camera stream
+            self.camera.subscription().map(Message::Camera),
+        ])
     }
 
     pub fn run(settings: iced::Settings) -> iced::Result {
@@ -142,6 +150,7 @@ impl MainWindow {
                 self.connected_devices = connected_devices;
             }
             Message::IndiError(_) => todo!(),
+            Message::Camera(msg) => self.camera.update(msg),
         }
         Task::none()
     }
@@ -179,12 +188,13 @@ impl MainWindow {
                             ContainerLayer::Layer2
                         )
                         .width(Length::Fill),
-                        image("assets/placeholder.png")
-                            .height(Length::Shrink)
-                            .content_fit(ContentFit::Contain),
-                        image("assets/placeholder.png")
-                            .height(Length::Shrink)
-                            .content_fit(ContentFit::Contain),
+                        container(self.camera.view().map(Message::Camera))
+                            .align_x(Alignment::Center)
+                            .align_y(Alignment::Center),
+                        container(image("assets/placeholder.png").width(Length::Fill))
+                            .width(Length::Fill)
+                            .align_x(Alignment::Center)
+                            .align_y(Alignment::Center),
                         sidereal_button(
                             container(text("Launch Planetarium"))
                                 .width(Length::Fill)
