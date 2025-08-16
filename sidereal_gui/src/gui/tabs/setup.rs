@@ -7,6 +7,7 @@ use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::styles::picklist_style::sidereal_picklist;
 use crate::gui::styles::text_input_style::sidereal_text_input;
+use crate::gui::widgets::server_status::ServerStatus;
 use crate::model::{indi_server_handler, planetarium_handler, SiderealError, SiderealResult};
 
 #[derive(Debug, Clone)]
@@ -66,7 +67,7 @@ impl SetupState {
             },
             |result: SiderealResult<()>| match result {
                 Ok(()) => MainMessage::Noop,
-                Err(e) => MainMessage::ErrorOccurred(e.to_string()),
+                Err(e) => MainMessage::ErrorOccurred(SiderealError::ConfigError(e.to_string())),
             },
         )
     }
@@ -83,17 +84,25 @@ impl SetupState {
             Message::SetLocation {} => return self.set_location(),
             Message::ConnectToServer => {
                 let ip = self.server_ip.clone();
-                return Task::perform(
+
+                let announce_connecting =
+                    Task::done(MainMessage::ServerStatus(ServerStatus::Connecting));
+
+                let do_connect = Task::perform(
                     async move {
                         indi_server_handler::connect_to_server(ip.ok_or("No server IP selected")?)
                             .await
                             .map_err(|e| e.to_string())
                     },
                     |result| match result {
-                        Ok(_) => MainMessage::Noop,
-                        Err(e) => MainMessage::ErrorOccurred(e),
+                        Ok(_) => MainMessage::ServerStatus(ServerStatus::Connected),
+                        Err(e) => MainMessage::ErrorOccurred(SiderealError::ServerConnectionError(
+                            e.to_string(),
+                        )),
                     },
                 );
+
+                return Task::batch(vec![announce_connecting, do_connect]);
             }
         }
         Task::none()

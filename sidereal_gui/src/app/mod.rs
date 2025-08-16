@@ -1,7 +1,9 @@
 use crate::gui::styles::button_style::sidereal_button;
-use crate::gui::tabs::mount;
+use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::widgets::dialog::dialog;
-use crate::model::planetarium_handler;
+use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
+use crate::model::indi_server_handler::param_watcher;
+use crate::model::{planetarium_handler, SiderealError};
 use crate::{
     config::Config,
     gui::{
@@ -9,11 +11,11 @@ use crate::{
         tabs::{self, MainWindowState, Tab},
     },
 };
-use iced::widget::{column, row};
+use iced::widget::{column, row, scrollable, Column, Space};
 use iced::widget::{container, image};
 use iced::Alignment::{self};
-use iced::ContentFit;
 use iced::{widget::text, Element, Length, Task};
+use iced::{ContentFit, Subscription};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -27,15 +29,26 @@ pub enum Message {
     Focus(tabs::focus::Message),
     Guide(tabs::guide::Message),
     ConfigLoaded(Config),
-    ErrorOccurred(String),
+    ErrorOccurred(SiderealError),
     ErrorCleared(),
     LaunchPlanetarium,
+    ServerStatus(ServerStatus),
+    ConnectedDeviceChange(ConnectedDevices),
+    IndiError(String),
+}
+#[derive(Debug, Clone, Default)]
+pub struct ConnectedDevices {
+    pub mount: Option<String>,
+    pub camera: Option<String>,
+    pub focuser: Option<String>,
 }
 
 #[derive(Default)]
 pub struct MainWindow {
     state: MainWindowState,
     error_message: Option<String>,
+    server_status: ServerStatus,
+    connected_devices: ConnectedDevices,
 }
 
 impl MainWindow {
@@ -53,13 +66,7 @@ impl MainWindow {
     }
 
     fn subscription(&self) -> iced::Subscription<Message> {
-        // Get the mount tab's subscription (it returns Subscription<MountMsg>)
-        let mount_sub: iced::Subscription<mount::Message> = self.state.mount.subscription();
-
-        // Map it into your app-wide Message type
-        let mount_sub_mapped: iced::Subscription<Message> = mount_sub.map(Message::Mount);
-
-        iced::Subscription::batch([mount_sub_mapped])
+        Subscription::run_with_id("coords_subscription", param_watcher())
     }
 
     pub fn run(settings: iced::Settings) -> iced::Result {
@@ -103,7 +110,10 @@ impl MainWindow {
                 self.state.setup.on_config_load(config);
             }
             Message::ErrorOccurred(err) => {
-                self.error_message = Some(err);
+                self.error_message = Some(err.to_string());
+                if let SiderealError::ServerConnectionError(_) = err {
+                    self.server_status = ServerStatus::Disconnected;
+                }
             }
             Message::ErrorCleared() => self.error_message = None,
             Message::LaunchPlanetarium => {
@@ -118,11 +128,20 @@ impl MainWindow {
                     },
                     |result| match result {
                         Ok(_) => Message::Noop, // or whatever message you want on success
-                        Err(e) => Message::ErrorOccurred(e),
+                        Err(e) => {
+                            Message::ErrorOccurred(SiderealError::PlanetariumError(e.to_string()))
+                        }
                     },
                 );
             }
+            Message::ServerStatus(status) => {
+                self.server_status = status;
+            }
             Message::Noop => {}
+            Message::ConnectedDeviceChange(connected_devices) => {
+                self.connected_devices = connected_devices;
+            }
+            Message::IndiError(_) => todo!(),
         }
         Task::none()
     }
@@ -146,21 +165,80 @@ impl MainWindow {
             .height(Length::Fill);
 
         let layout = row![
-            column![
-                image("assets/placeholder.png")
-                    .height(Length::Shrink)
-                    .content_fit(ContentFit::Contain),
-                image("assets/placeholder.png")
-                    .height(Length::Shrink)
-                    .content_fit(ContentFit::Contain),
-                sidereal_button(
-                    container(text("Launch Planetarium"))
+            column![content_container(
+                scrollable(
+                    column![
+                        content_container(
+                            row![
+                                text("Server Status:"),
+                                Space::with_width(Length::Fill),
+                                server_status_widget(&self.server_status)
+                            ]
+                            .align_y(Alignment::Center)
+                            .spacing(10),
+                            ContainerLayer::Layer2
+                        )
+                        .width(Length::Fill),
+                        image("assets/placeholder.png")
+                            .height(Length::Shrink)
+                            .content_fit(ContentFit::Contain),
+                        image("assets/placeholder.png")
+                            .height(Length::Shrink)
+                            .content_fit(ContentFit::Contain),
+                        sidereal_button(
+                            container(text("Launch Planetarium"))
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                        )
                         .width(Length::Fill)
-                        .align_x(Alignment::Center)
+                        .on_press(Message::LaunchPlanetarium),
+                        text("Connected Devices"),
+                        match &self.connected_devices.mount {
+                            Some(mount) => column![content_container(
+                                row![text("Mount:"), Space::with_width(Length::Fill), text(mount)],
+                                ContainerLayer::Layer2
+                            )],
+                            None => Column::new(), // renders nothing
+                        },
+                        match &self.connected_devices.camera {
+                            Some(camera) => column![content_container(
+                                row![
+                                    text("Camera:"),
+                                    Space::with_width(Length::Fill),
+                                    text(camera)
+                                ],
+                                ContainerLayer::Layer2
+                            )],
+                            None => Column::new(), // renders nothing
+                        },
+                        match &self.connected_devices.focuser {
+                            Some(focuser) => column![content_container(
+                                row![
+                                    text("Focuser:"),
+                                    Space::with_width(Length::Fill),
+                                    text(focuser)
+                                ],
+                                ContainerLayer::Layer2
+                            )],
+                            None => Column::new(), // renders nothing
+                        },
+                    ]
+                    .spacing(10) // .padding(iced::Padding {
+                                 //     top: 0.0,
+                                 //     right: 22.0,
+                                 //     bottom: 0.0,
+                                 //     left: 0.0,
+                                 // })
                 )
-                .width(Length::Fill)
-                .on_press(Message::LaunchPlanetarium)
-            ]
+                .spacing(10),
+                // .direction(scrollable::Direction::Vertical(
+                //     Properties::new()
+                //         .width(16) // reserve gutter width
+                //         .scroller_width(8), // actual scrollbar thickness
+                // )),
+                ContainerLayer::Layer1
+            )
+            .width(Length::Fill),]
             .width(Length::FillPortion(1))
             .spacing(10),
             column![header, content]

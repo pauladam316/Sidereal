@@ -1,11 +1,10 @@
 use iced::widget::{checkbox, column, container, image, row, slider, text, Image, Space};
-use iced::{Alignment, Element, Length, Subscription, Task};
+use iced::{Alignment, Element, Length, Task};
 
 use crate::app::Message as MainMessage;
 use crate::gui::styles::button_style::{sidereal_button, stop_track_button, track_button};
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::styles::text_input_style::sidereal_text_input;
-use crate::model::indi_server_handler::param_watcher;
 #[derive(Debug, Clone)]
 pub enum Message {
     Noop,
@@ -14,7 +13,6 @@ pub enum Message {
     StartTracking,
     StopTracking,
     CoordsUpdated { ra_hours: f64, dec_deg: f64 },
-    IndiError(String),
 }
 
 #[derive(Default)]
@@ -56,14 +54,7 @@ fn controller_button(direction: ButtonDirection) -> Image {
     return img;
 }
 
-pub fn coords_subscription() -> Subscription<Message> {
-    Subscription::run_with_id("coords_subscription", param_watcher())
-}
-
 impl MountState {
-    pub fn subscription(&self) -> iced::Subscription<Message> {
-        coords_subscription()
-    }
     pub fn update(&mut self, message: Message) -> Task<MainMessage> {
         match message {
             Message::Noop => todo!(),
@@ -75,7 +66,6 @@ impl MountState {
                 self.mount_ra = ra_hours.to_string();
                 self.mount_dec = dec_deg.to_string();
             }
-            Message::IndiError(_) => todo!(),
         }
         Task::none()
     }

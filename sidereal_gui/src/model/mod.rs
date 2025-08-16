@@ -8,10 +8,14 @@ pub type SiderealResult<T> = Result<T, SiderealError>;
 #[derive(Error, Debug, Clone)]
 
 pub enum SiderealError {
-    #[error("ConfigError: {reason}")]
-    ConfigError { reason: String },
+    #[error("ConfigError: {0}")]
+    ConfigError(String),
     #[error("ParseError: {0}")]
     ParseError(String),
     #[error("ServerError: {0}")]
     ServerError(String),
+    #[error("PlanetariumError: {0}")]
+    PlanetariumError(String),
+    #[error("ServerConnectionError: {0}")]
+    ServerConnectionError(String),
 }

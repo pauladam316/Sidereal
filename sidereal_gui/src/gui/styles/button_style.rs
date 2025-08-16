@@ -59,7 +59,7 @@ where
         .style(move |_theme: &Theme, status| {
             let hovered = matches!(status, Status::Hovered);
             iced::widget::button::Style {
-                background: Some(Background::Color(styles::TRACK_BUTTON_COLOR)),
+                background: Some(Background::Color(styles::GREEN_BUTTON_COLOR)),
 
                 text_color: if hovered {
                     styles::ACCENT_COLOR
@@ -81,7 +81,7 @@ where
                     color: if hovered {
                         styles::ACCENT_COLOR
                     } else {
-                        styles::TRACK_BUTTON_BORDER
+                        styles::GREEN_BUTTON_BORDER
                     },
                     width: 2.0,
                     radius: 20.0.into(),
@@ -101,7 +101,7 @@ where
         .style(move |_theme: &Theme, status| {
             let hovered = matches!(status, Status::Hovered);
             iced::widget::button::Style {
-                background: Some(Background::Color(styles::STOP_TRACK_BUTTON_COLOR)),
+                background: Some(Background::Color(styles::RED_BUTTON_COLOR)),
 
                 text_color: if hovered {
                     styles::ACCENT_COLOR
@@ -123,7 +123,7 @@ where
                     color: if hovered {
                         styles::ACCENT_COLOR
                     } else {
-                        styles::STOP_TRACK_BUTTON_BORDER
+                        styles::RED_BUTTON_BORDER
                     },
                     width: 2.0,
                     radius: 20.0.into(),

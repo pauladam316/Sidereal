@@ -54,15 +54,11 @@ impl Config {
     pub async fn load_or_default() -> SiderealResult<Config> {
         let path = default_config_path();
         if path.exists() {
-            let raw =
-                tokio::fs::read_to_string(path)
-                    .await
-                    .map_err(|e| SiderealError::ConfigError {
-                        reason: e.to_string(),
-                    })?;
-            let cfg = serde_json::from_str(&raw).map_err(|e| SiderealError::ConfigError {
-                reason: e.to_string(),
-            })?;
+            let raw = tokio::fs::read_to_string(path)
+                .await
+                .map_err(|e| SiderealError::ConfigError(e.to_string()))?;
+            let cfg = serde_json::from_str(&raw)
+                .map_err(|e| SiderealError::ConfigError(e.to_string()))?;
             Ok(cfg)
         } else {
             Ok(Config::default())
@@ -72,15 +68,11 @@ impl Config {
     /// Save current config to disk
     pub async fn save(&self) -> SiderealResult<()> {
         let path = default_config_path();
-        let serialized =
-            serde_json::to_string_pretty(self).map_err(|e| SiderealError::ConfigError {
-                reason: e.to_string(),
-            })?;
+        let serialized = serde_json::to_string_pretty(self)
+            .map_err(|e| SiderealError::ConfigError(e.to_string()))?;
         tokio::fs::write(path, serialized)
             .await
-            .map_err(|e| SiderealError::ConfigError {
-                reason: e.to_string(),
-            })?;
+            .map_err(|e| SiderealError::ConfigError(e.to_string()))?;
         Ok(())
     }
 
@@ -95,9 +87,10 @@ impl Config {
     /// Persist the in-memory global config to disk
     pub async fn persist() -> SiderealResult<()> {
         let guard = GLOBAL_CONFIG.read().await;
-        guard.save().await.map_err(|e| SiderealError::ConfigError {
-            reason: e.to_string(),
-        })
+        guard
+            .save()
+            .await
+            .map_err(|e| SiderealError::ConfigError(e.to_string()))
     }
 
     /// Get a cloned snapshot of the current config
