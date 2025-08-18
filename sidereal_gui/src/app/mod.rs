@@ -1,8 +1,9 @@
+use crate::gui::camera_display::{CameraManager, CameraMessage};
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
+use crate::gui::tabs::setup::BubbleMessagePayload;
 use crate::gui::widgets::dialog::dialog;
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
-use crate::gui::widgets::video::{IpCamera, IpCameraMessage};
 use crate::model::indi_server_handler::param_watcher;
 use crate::model::{planetarium_handler, SiderealError};
 use crate::{
@@ -12,11 +13,11 @@ use crate::{
         tabs::{self, MainWindowState, Tab},
     },
 };
+use iced::widget::container;
 use iced::widget::{column, row, scrollable, Column, Space};
-use iced::widget::{container, image};
 use iced::Alignment::{self};
+use iced::Subscription;
 use iced::{widget::text, Element, Length, Task};
-use iced::{ContentFit, Subscription};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -36,7 +37,7 @@ pub enum Message {
     ServerStatus(ServerStatus),
     ConnectedDeviceChange(ConnectedDevices),
     IndiError(String),
-    Camera(IpCameraMessage),
+    ModifyCameras(CameraMessage),
 }
 #[derive(Debug, Clone, Default)]
 pub struct ConnectedDevices {
@@ -51,7 +52,7 @@ pub struct MainWindow {
     error_message: Option<String>,
     server_status: ServerStatus,
     connected_devices: ConnectedDevices,
-    camera: IpCamera,
+    camera_manager: CameraManager,
 }
 
 impl MainWindow {
@@ -73,7 +74,9 @@ impl MainWindow {
             // your existing stream
             Subscription::run_with_id("coords_subscription", param_watcher()),
             // the camera stream
-            self.camera.subscription().map(Message::Camera),
+            self.camera_manager
+                .subscription()
+                .map(|m| Message::ModifyCameras(m)),
         ])
     }
 
@@ -93,9 +96,14 @@ impl MainWindow {
             Message::Tab(tab) => {
                 self.state.active = tab;
             }
-            Message::Setup(msg) => {
-                return self.state.setup.update(msg);
-            }
+            Message::Setup(msg) => match msg {
+                tabs::setup::Message::Bubble(bubble_message) => match bubble_message {
+                    BubbleMessagePayload::Camera(camera_message) => {
+                        return Task::done(Message::ModifyCameras(camera_message))
+                    }
+                },
+                other => return self.state.setup.update(other),
+            },
             Message::Mount(msg) => {
                 return self.state.mount.update(msg);
             }
@@ -150,7 +158,9 @@ impl MainWindow {
                 self.connected_devices = connected_devices;
             }
             Message::IndiError(_) => todo!(),
-            Message::Camera(msg) => self.camera.update(msg),
+            Message::ModifyCameras(camera_message) => {
+                self.camera_manager.handle_message(camera_message);
+            }
         }
         Task::none()
     }
@@ -159,7 +169,11 @@ impl MainWindow {
         let header = tabs::header(self.state.active, |t| Message::Tab(t));
 
         let inner_content: Element<_> = match self.state.active {
-            Tab::Setup => self.state.setup.view().map(Message::Setup),
+            Tab::Setup => self
+                .state
+                .setup
+                .view(&self.camera_manager)
+                .map(Message::Setup),
             Tab::Mount => self.state.mount.view().map(Message::Mount),
             Tab::Observatory => self.state.observatory.view().map(Message::Observatory),
             Tab::PlateSolve => self.state.plate_solve.view().map(Message::PlateSolve),
@@ -188,13 +202,13 @@ impl MainWindow {
                             ContainerLayer::Layer2
                         )
                         .width(Length::Fill),
-                        container(self.camera.view().map(Message::Camera))
-                            .align_x(Alignment::Center)
-                            .align_y(Alignment::Center),
-                        container(image("assets/placeholder.png").width(Length::Fill))
-                            .width(Length::Fill)
-                            .align_x(Alignment::Center)
-                            .align_y(Alignment::Center),
+                        container(
+                            self.camera_manager
+                                .view_cameras()
+                                .map(Message::ModifyCameras)
+                        )
+                        .align_x(Alignment::Center)
+                        .align_y(Alignment::Center),
                         sidereal_button(
                             container(text("Launch Planetarium"))
                                 .width(Length::Fill)

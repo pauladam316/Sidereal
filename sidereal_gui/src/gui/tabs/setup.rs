@@ -3,11 +3,13 @@ use iced::{Alignment, Element, Length, Task};
 
 use crate::app::Message as MainMessage;
 use crate::config::Config;
+use crate::gui::camera_display::{CameraManager, CameraMessage};
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::styles::picklist_style::sidereal_picklist;
 use crate::gui::styles::text_input_style::sidereal_text_input;
 use crate::gui::widgets::server_status::ServerStatus;
+
 use crate::model::{indi_server_handler, planetarium_handler, SiderealError, SiderealResult};
 
 #[derive(Debug, Clone)]
@@ -17,6 +19,11 @@ pub enum Field {
     Altitude,
 }
 
+//bubbled messages are ones emitted by the setup tab that are to be handled by the main app
+#[derive(Debug, Clone)]
+pub enum BubbleMessagePayload {
+    Camera(CameraMessage),
+}
 #[derive(Debug, Clone)]
 pub enum Message {
     SelectServer(&'static str),
@@ -24,6 +31,7 @@ pub enum Message {
     FieldChanged { field: Field, value: String },
     SetLocation,
     ConnectToServer,
+    Bubble(BubbleMessagePayload),
 }
 
 #[derive(Default)]
@@ -104,10 +112,12 @@ impl SetupState {
 
                 return Task::batch(vec![announce_connecting, do_connect]);
             }
+            Message::Bubble(_) => {}
         }
         Task::none()
     }
-    pub fn view(&self) -> Element<Message> {
+
+    pub fn view<'a>(&'a self, camera_manager: &'a CameraManager) -> Element<'a, Message> {
         let server_ips: [&'static str; 2] = ["127.0.0.1:7624", "test"];
         let cities: [&'static str; 1] = ["Arlington, VA"];
 
@@ -123,58 +133,72 @@ impl SetupState {
         .placeholder("Select city")
         .width(Length::Fill);
 
-        let layout = column![
-            content_container(
-                row![
-                    text("Server"),
-                    pick,
-                    sidereal_button(text("Add")).on_press(Message::SelectServer("placeholder")),
-                    sidereal_button(text("Connect")).on_press(Message::ConnectToServer)
-                ]
-                .align_y(Alignment::Center)
-                .spacing(10),
-                ContainerLayer::Layer1,
-            )
-            .padding(10),
-            content_container(
-                column![
-                    text("Site Setup"),
-                    row![text("Location"), location_pick,]
-                        .align_y(Alignment::Center)
-                        .spacing(10),
+        let layout =
+            column![
+                content_container(
                     row![
-                        text("Latitude"),
-                        sidereal_text_input("latitude", &self.latitude).on_input(|v| {
-                            Message::FieldChanged {
-                                field: Field::Latitude,
-                                value: v,
-                            }
-                        }),
-                        text("Longitude"),
-                        sidereal_text_input("longitude", &self.longitude).on_input(|v| {
-                            Message::FieldChanged {
-                                field: Field::Longitude,
-                                value: v,
-                            }
-                        }),
-                        text("Altitude"),
-                        sidereal_text_input("altitude", &self.altitude).on_input(|v| {
-                            Message::FieldChanged {
-                                field: Field::Altitude,
-                                value: v,
-                            }
-                        }),
-                        sidereal_button("Apply").on_press(Message::SetLocation)
+                        text("Server"),
+                        pick,
+                        sidereal_button(text("Add")).on_press(Message::SelectServer("placeholder")),
+                        sidereal_button(text("Connect")).on_press(Message::ConnectToServer)
                     ]
                     .align_y(Alignment::Center)
                     .spacing(10),
-                ]
-                .spacing(10),
-                ContainerLayer::Layer1
-            )
-            .padding(10)
-        ]
-        .spacing(10);
+                    ContainerLayer::Layer1,
+                )
+                .padding(10),
+                content_container(
+                    column![
+                        text("Site Setup"),
+                        row![text("Location"), location_pick,]
+                            .align_y(Alignment::Center)
+                            .spacing(10),
+                        row![
+                            text("Latitude"),
+                            sidereal_text_input("latitude", &self.latitude).on_input(|v| {
+                                Message::FieldChanged {
+                                    field: Field::Latitude,
+                                    value: v,
+                                }
+                            }),
+                            text("Longitude"),
+                            sidereal_text_input("longitude", &self.longitude).on_input(|v| {
+                                Message::FieldChanged {
+                                    field: Field::Longitude,
+                                    value: v,
+                                }
+                            }),
+                            text("Altitude"),
+                            sidereal_text_input("altitude", &self.altitude).on_input(|v| {
+                                Message::FieldChanged {
+                                    field: Field::Altitude,
+                                    value: v,
+                                }
+                            }),
+                            sidereal_button("Apply").on_press(Message::SetLocation)
+                        ]
+                        .align_y(Alignment::Center)
+                        .spacing(10),
+                    ]
+                    .spacing(10),
+                    ContainerLayer::Layer1
+                )
+                .padding(10),
+                content_container(
+                    column![
+                        text("Cameras"),
+                        camera_manager
+                            .view_camera_setup()
+                            .map(|m| Message::Bubble(BubbleMessagePayload::Camera(m))),
+                        sidereal_button("Add Camera").width(Length::Fill).on_press(
+                            Message::Bubble(BubbleMessagePayload::Camera(CameraMessage::AddCamera))
+                        )
+                    ]
+                    .spacing(10),
+                    ContainerLayer::Layer1
+                )
+            ]
+            .spacing(10);
         layout.into()
     }
 }
