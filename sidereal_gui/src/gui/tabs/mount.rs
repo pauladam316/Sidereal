@@ -1,75 +1,63 @@
-use iced::widget::{checkbox, column, container, image, row, slider, text, Image, Space};
+use iced::widget::{checkbox, column, container, row, slider, text, Space};
 use iced::{Alignment, Element, Length, Task};
 
 use crate::app::Message as MainMessage;
 use crate::gui::styles::button_style::{sidereal_button, stop_track_button, track_button};
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::styles::text_input_style::sidereal_text_input;
+use crate::gui::widgets::mount_steer_button::{
+    ButtonDirection, MountMoveMessage, MountSteerButton,
+};
 #[derive(Debug, Clone)]
 pub enum Message {
     Noop,
     SetSetPoint(f32),
-    MoveMount(ButtonDirection),
     StartTracking,
     StopTracking,
-    CoordsUpdated { ra_hours: f64, dec_deg: f64 },
+    CoordsUpdated {
+        ra_hours: f64,
+        dec_deg: f64,
+    },
+    MountMove {
+        index: usize,
+        message: MountMoveMessage,
+    },
 }
 
-#[derive(Default)]
 pub struct MountState {
     mount_ra: String,
     mount_dec: String,
+    mount_steer_buttons: Vec<MountSteerButton>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ButtonDirection {
-    N,
-    S,
-    E,
-    W,
-    NE,
-    SE,
-    NW,
-    SW,
-    Stop,
-}
-fn controller_button(direction: ButtonDirection) -> Image {
-    let icon_bytes: &'static [u8] = match direction {
-        ButtonDirection::N => include_bytes!("../../../assets/N.png").as_slice(),
-        ButtonDirection::S => include_bytes!("../../../assets/S.png").as_slice(),
-        ButtonDirection::E => include_bytes!("../../../assets/E.png").as_slice(),
-        ButtonDirection::W => include_bytes!("../../../assets/W.png").as_slice(),
-        ButtonDirection::NE => include_bytes!("../../../assets/NE.png").as_slice(),
-        ButtonDirection::SE => include_bytes!("../../../assets/SE.png").as_slice(),
-        ButtonDirection::NW => include_bytes!("../../../assets/NW.png").as_slice(),
-        ButtonDirection::SW => include_bytes!("../../../assets/SW.png").as_slice(),
-        ButtonDirection::Stop => include_bytes!("../../../assets/stop.png").as_slice(),
-    };
-
-    let handle = image::Handle::from_bytes(icon_bytes);
-
-    let img = image(handle)
-        .width(Length::Fixed(48.0))
-        .height(Length::Fixed(48.0));
-    return img;
+impl Default for MountState {
+    fn default() -> Self {
+        Self {
+            mount_ra: Default::default(),
+            mount_dec: Default::default(),
+            mount_steer_buttons: (0..9).map(|_| MountSteerButton::default()).collect(),
+        }
+    }
 }
 
 impl MountState {
     pub fn update(&mut self, message: Message) -> Task<MainMessage> {
         match message {
-            Message::Noop => todo!(),
+            Message::Noop => {}
             Message::SetSetPoint(_) => todo!(),
-            Message::MoveMount(_) => todo!(),
             Message::StartTracking => todo!(),
             Message::StopTracking => todo!(),
             Message::CoordsUpdated { ra_hours, dec_deg } => {
                 self.mount_ra = ra_hours.to_string();
                 self.mount_dec = dec_deg.to_string();
             }
+            Message::MountMove { index, message } => {
+                return self.mount_steer_buttons[index].update(message);
+            }
         }
         Task::none()
     }
-    pub fn view(&self) -> Element<'static, Message> {
+    pub fn view(&self) -> Element<Message> {
         let layout = row![
             column![
                 row![content_container(
@@ -202,23 +190,66 @@ impl MountState {
                 column![
                     text("Manual Slew"),
                     row![
-                        sidereal_button(controller_button(ButtonDirection::NW))
-                            .padding(10)
-                            .on_press(Message::MoveMount(ButtonDirection::NW)),
-                        sidereal_button(controller_button(ButtonDirection::N)).padding(10),
-                        sidereal_button(controller_button(ButtonDirection::NE)).padding(10),
+                        self.mount_steer_buttons[0]
+                            .view(ButtonDirection::NW)
+                            .map(|m| Message::MountMove {
+                                index: 0,
+                                message: m
+                            }),
+                        self.mount_steer_buttons[1]
+                            .view(ButtonDirection::N)
+                            .map(|m| Message::MountMove {
+                                index: 1,
+                                message: m
+                            }),
+                        self.mount_steer_buttons[2]
+                            .view(ButtonDirection::NE)
+                            .map(|m| Message::MountMove {
+                                index: 2,
+                                message: m
+                            }),
                     ]
                     .spacing(3),
                     row![
-                        sidereal_button(controller_button(ButtonDirection::W)).padding(10),
-                        sidereal_button(controller_button(ButtonDirection::Stop)).padding(10),
-                        sidereal_button(controller_button(ButtonDirection::E)).padding(10),
+                        self.mount_steer_buttons[3]
+                            .view(ButtonDirection::W)
+                            .map(|m| Message::MountMove {
+                                index: 3,
+                                message: m
+                            }),
+                        self.mount_steer_buttons[4]
+                            .view(ButtonDirection::Stop)
+                            .map(|m| Message::MountMove {
+                                index: 4,
+                                message: m
+                            }),
+                        self.mount_steer_buttons[5]
+                            .view(ButtonDirection::E)
+                            .map(|m| Message::MountMove {
+                                index: 5,
+                                message: m
+                            }),
                     ]
                     .spacing(3),
                     row![
-                        sidereal_button(controller_button(ButtonDirection::SW)).padding(10),
-                        sidereal_button(controller_button(ButtonDirection::S)).padding(10),
-                        sidereal_button(controller_button(ButtonDirection::SE)).padding(10),
+                        self.mount_steer_buttons[6]
+                            .view(ButtonDirection::SW)
+                            .map(|m| Message::MountMove {
+                                index: 6,
+                                message: m
+                            }),
+                        self.mount_steer_buttons[7]
+                            .view(ButtonDirection::S)
+                            .map(|m| Message::MountMove {
+                                index: 7,
+                                message: m
+                            }),
+                        self.mount_steer_buttons[8]
+                            .view(ButtonDirection::SE)
+                            .map(|m| Message::MountMove {
+                                index: 8,
+                                message: m
+                            }),
                     ]
                     .spacing(3),
                     column![

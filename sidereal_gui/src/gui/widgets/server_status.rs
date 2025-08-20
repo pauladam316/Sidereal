@@ -15,11 +15,13 @@ pub enum ServerStatus {
     Disconnected,
     Connecting,
     Connected,
+    ConnectionLost,
 }
 
 impl fmt::Display for ServerStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ServerStatus::ConnectionLost => write!(f, "Connection Lost"),
             ServerStatus::Disconnected => write!(f, "Disconnected"),
             ServerStatus::Connecting => write!(f, "Connecting"),
             ServerStatus::Connected => write!(f, "Connected"),
@@ -40,6 +42,11 @@ where
     // Choose colors per state (tweak to match your theme)
     let (bg, fg, border) = match status {
         ServerStatus::Disconnected => (
+            styles::RED_BUTTON_COLOR,
+            styles::RED_TEXT,
+            styles::RED_BUTTON_BORDER,
+        ),
+        ServerStatus::ConnectionLost => (
             styles::RED_BUTTON_COLOR,
             styles::RED_TEXT,
             styles::RED_BUTTON_BORDER,

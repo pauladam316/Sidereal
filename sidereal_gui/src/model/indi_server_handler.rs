@@ -1,6 +1,6 @@
 use crate::{
     app::{ConnectedDevices, Message},
-    gui::tabs::mount::Message as MountMessage,
+    gui::{tabs::mount::Message as MountMessage, widgets::server_status::ServerStatus},
     model::{SiderealError, SiderealResult},
 };
 use iced::{
@@ -9,14 +9,20 @@ use iced::{
 };
 use indi::client::active_device::ActiveDevice;
 use once_cell::sync::Lazy;
+
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     net::TcpStream,
     sync::RwLock,
-    time::{self, Instant},
+    time::{self, interval, Instant},
 };
-type IndiClientInner = indi::client::Client;
-type SharedIndiClient = Arc<RwLock<Option<Arc<IndiClientInner>>>>;
+// type IndiClientInner = indi::client::Client;
+
+pub struct IndiClientInstance {
+    ip: String,
+    client: indi::client::Client,
+}
+type SharedIndiClient = Arc<RwLock<Option<Arc<IndiClientInstance>>>>;
 
 pub static INDI_CLIENT: Lazy<SharedIndiClient> = Lazy::new(|| Arc::new(RwLock::new(None)));
 
@@ -31,24 +37,27 @@ pub(crate) async fn connect_to_server(ip_addr: &str) -> SiderealResult<()> {
 
     {
         let mut guard = INDI_CLIENT.write().await;
-        *guard = Some(Arc::new(client));
+        *guard = Some(Arc::new(IndiClientInstance {
+            ip: ip_addr.to_owned(),
+            client,
+        }));
     }
 
     println!("Connected");
     Ok(())
 }
 
-pub struct ConnectedDevicesOne {
+pub struct ServerInstance {
     pub mount: Option<ActiveDevice>,
     pub camera: Option<ActiveDevice>,
     pub focuser: Option<ActiveDevice>,
 }
 
-type SharedConnected = Arc<RwLock<ConnectedDevicesOne>>;
+type SharedConnected = Arc<RwLock<ServerInstance>>;
 pub static CONNECTED_DEVICES: Lazy<SharedConnected> =
-    Lazy::new(|| Arc::new(RwLock::new(ConnectedDevicesOne::default())));
+    Lazy::new(|| Arc::new(RwLock::new(ServerInstance::default())));
 
-impl Default for ConnectedDevicesOne {
+impl Default for ServerInstance {
     fn default() -> Self {
         Self {
             mount: None,
@@ -63,6 +72,52 @@ const IF_TELESCOPE: u32 = 0x0001; // mount
 const IF_CCD: u32 = 0x0002; // camera
 const IF_FOCUSER: u32 = 0x0008; // focuser
 
+pub async fn move_mount(direction: String, subdirection: String) -> SiderealResult<()> {
+    let devices = CONNECTED_DEVICES.read().await;
+    match &devices.mount {
+        Some(mount) => match mount
+            .change(direction.as_str(), vec![(subdirection.as_str(), true)])
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => Err(SiderealError::ServerError(format!("{:?}", e))),
+        },
+        None => Err(SiderealError::ServerError(
+            "No mount available to command".to_owned(),
+        )),
+    }
+}
+
+pub async fn stop_move() {
+    let devices = CONNECTED_DEVICES.read().await;
+    if let Some(mount) = &devices.mount {
+        if let Err(e) = mount
+            .change("TELESCOPE_MOTION_NS", vec![("MOTION_NORTH", false)])
+            .await
+        {
+            println!("{:?}", e);
+        }
+        if let Err(e) = mount
+            .change("TELESCOPE_MOTION_NS", vec![("MOTION_SOUTH", false)])
+            .await
+        {
+            println!("{:?}", e);
+        }
+        if let Err(e) = mount
+            .change("TELESCOPE_MOTION_WE", vec![("MOTION_WEST", false)])
+            .await
+        {
+            println!("{:?}", e);
+        }
+        if let Err(e) = mount
+            .change("TELESCOPE_MOTION_WE", vec![("MOTION_EAST", false)])
+            .await
+        {
+            println!("{:?}", e);
+        }
+    }
+}
+
 //TODO: run this every time the device list changes
 pub async fn find_connected_devices<S>(
     mut out: S, // e.g., the sender from `stream::channel`
@@ -73,7 +128,7 @@ where
     let start = Instant::now();
 
     // Wait until INDI_CLIENT is set
-    let client: Arc<IndiClientInner> = loop {
+    let client_instance: Arc<IndiClientInstance> = loop {
         if let Some(c) = INDI_CLIENT.read().await.as_ref().cloned() {
             break c;
         }
@@ -83,7 +138,7 @@ where
     loop {
         // ---- 1) Scan under locks: collect *names* only ----
         let (mount_name, camera_name, focuser_name) = {
-            let devices = client.get_devices();
+            let devices = client_instance.client.get_devices();
             let map = devices.lock().await;
 
             let mut mount_name: Option<String> = None;
@@ -141,24 +196,27 @@ where
         };
 
         // ---- 2) Resolve names to ActiveDevice (no locks held) ----
-        let mut result = ConnectedDevicesOne::default();
+        let mut result = ServerInstance::default();
 
         if let Some(n) = mount_name.clone() {
-            let dev = client
+            let dev = client_instance
+                .client
                 .get_device::<()>(&n)
                 .await
                 .map_err(|e| SiderealError::ServerError(format!("get_device({n}): {:?}", e)))?;
             result.mount = Some(dev);
         }
         if let Some(n) = camera_name.clone() {
-            let dev = client
+            let dev = client_instance
+                .client
                 .get_device::<()>(&n)
                 .await
                 .map_err(|e| SiderealError::ServerError(format!("get_device({n}): {:?}", e)))?;
             result.camera = Some(dev);
         }
         if let Some(n) = focuser_name.clone() {
-            let dev = client
+            let dev = client_instance
+                .client
                 .get_device::<()>(&n)
                 .await
                 .map_err(|e| SiderealError::ServerError(format!("get_device({n}): {:?}", e)))?;
@@ -191,7 +249,7 @@ where
     }
 }
 async fn find_mount(
-    client: &Arc<IndiClientInner>,
+    client_instance: &Arc<IndiClientInstance>,
 ) -> Result<indi::client::active_device::ActiveDevice, String> {
     use std::time::Instant;
 
@@ -199,7 +257,7 @@ async fn find_mount(
     loop {
         // 1) Take a snapshot of the candidate mount name while holding locks
         let mount_name = {
-            let devices = client.get_devices(); // Arc<Mutex<HashMap<..>>>
+            let devices = client_instance.client.get_devices(); // Arc<Mutex<HashMap<..>>>
             let map = devices.lock().await;
 
             let mut found: Option<String> = None;
@@ -232,7 +290,8 @@ async fn find_mount(
 
         // 2) Do awaited calls only *after* all the above guards are dropped
         if let Some(name) = mount_name {
-            return client
+            return client_instance
+                .client
                 .get_device::<()>(&name)
                 .await
                 .map_err(|e| format!("get_device({name}): {:?}", e));
@@ -245,73 +304,148 @@ async fn find_mount(
     }
 }
 
+async fn tcp_probe(addr: &str) -> bool {
+    match time::timeout(Duration::from_secs(2), TcpStream::connect(addr)).await {
+        Ok(Ok(_)) => true, // could connect
+        _ => false,        // timed out or refused
+    }
+}
+
+const RECONNECT_DELAY_MS: u64 = 1000; // <-- constant backoff
+
+async fn handle_loss_and_break<S>(output: &mut S, reason: &str)
+where
+    S: Sink<Message> + Unpin,
+{
+    let _ = output
+        .send(Message::ServerStatus(ServerStatus::ConnectionLost))
+        .await;
+    println!("{}", format!("connection lost: {reason}"));
+
+    // Clear current client so the outer loop won't reuse a dead handle
+    {
+        let mut guard = INDI_CLIENT.write().await;
+        *guard = None;
+    }
+}
+
 pub fn param_watcher() -> impl Stream<Item = Message> {
     stream::channel(100, |mut output| async move {
-        // 1) Get a clone to the client (wait until connected)
-        let client: Arc<IndiClientInner> = loop {
-            if let Some(c) = INDI_CLIENT.read().await.as_ref().cloned() {
-                break c;
-            }
-            time::sleep(Duration::from_millis(100)).await;
-        };
-
-        if let Err(e) = find_connected_devices(&mut output).await {
-            let _ = output.send(Message::IndiError(format!("{e:?}"))).await;
-            return;
-        }
-
-        // 2) Find the mount
-        let mount = match find_mount(&client).await {
-            Ok(m) => m,
-            Err(e) => {
-                println!("Couldn't find mount");
-                let _ = output.send(Message::IndiError(e)).await;
-                return;
-            }
-        };
-        println!("Fouund Mount");
-        if let Err(e) = mount.change("CONNECTION", vec![("CONNECT", true)]).await {
-            println!("Failed to send CONNECT to mount: {:?}", e);
-        } else {
-            println!("CONNECT command sent to mount");
-        }
-        // 3) Get RA/DEC parameter notify (prefer EOD; fallback to J2000)
-        let param_notify = match mount.get_parameter("EQUATORIAL_EOD_COORD").await {
-            Ok(p) => p,
-            Err(_) => match mount.get_parameter("EQUATORIAL_COORD").await {
-                Ok(p) => p,
-                Err(e) => {
-                    println!("failed to find params");
-                    let _ = output
-                        .send(Message::IndiError(format!("get_parameter: {:?}", e)))
-                        .await;
-                    return;
+        'reconnect: loop {
+            // 1) Wait until we have a client; if none, sleep until someone connects initially.
+            //    (First connection is expected to be initiated elsewhere via connect_to_server).
+            let client_instance: Arc<IndiClientInstance> = loop {
+                if let Some(c) = INDI_CLIENT.read().await.as_ref().cloned() {
+                    break c;
                 }
-            },
-        };
-        // 4) Subscribe: current snapshot + all future changes
-        let mut changes = param_notify.subscribe().await; // BroadcastStream<Arc<Parameter>>
+                time::sleep(Duration::from_millis(100)).await;
+            };
 
-        while let Some(next) = changes.next().await {
-            match next {
-                Ok(param_arc) => {
-                    if let Ok(map) = param_arc.get_values::<HashMap<String, indi::Number>>() {
-                        if let (Some(ra), Some(dec)) = (map.get("RA"), map.get("DEC")) {
-                            let _ = output
-                                .send(Message::Mount(MountMessage::CoordsUpdated {
-                                    ra_hours: ra.value.into(), // hours
-                                    dec_deg: dec.value.into(), // degrees
-                                }))
-                                .await;
+            // Keep the server address handy for reconnects
+            let server_addr = client_instance.ip.clone();
+
+            // 2) Make sure devices are there
+            if let Err(e) = find_connected_devices(&mut output).await {
+                let _ = output.send(Message::IndiError(format!("{e:?}"))).await;
+                time::sleep(Duration::from_millis(RECONNECT_DELAY_MS)).await;
+                continue 'reconnect;
+            }
+
+            // 3) Find the mount
+            let mount = match find_mount(&client_instance).await {
+                Ok(m) => m,
+                Err(e) => {
+                    let _ = output.send(Message::IndiError(e)).await;
+                    time::sleep(Duration::from_millis(RECONNECT_DELAY_MS)).await;
+                    continue 'reconnect;
+                }
+            };
+
+            if let Err(e) = mount.change("CONNECTION", vec![("CONNECT", true)]).await {
+                let _ = output
+                    .send(Message::IndiError(format!("CONNECT failed: {e:?}")))
+                    .await;
+                time::sleep(Duration::from_millis(RECONNECT_DELAY_MS)).await;
+                continue 'reconnect;
+            }
+
+            // 4) Parameter we care about
+            let param_notify = match mount.get_parameter("EQUATORIAL_EOD_COORD").await {
+                Ok(p) => p,
+                Err(_) => match mount.get_parameter("EQUATORIAL_COORD").await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let _ = output
+                            .send(Message::IndiError(format!("get_parameter: {:?}", e)))
+                            .await;
+                        time::sleep(Duration::from_millis(RECONNECT_DELAY_MS)).await;
+                        continue 'reconnect;
+                    }
+                },
+            };
+
+            // 5) Subscribe & start heartbeat
+            let mut changes = param_notify.subscribe().await;
+            let mut hb = interval(Duration::from_secs(5));
+            hb.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+
+            // 6) Event loop
+            let lost = loop {
+                tokio::select! {
+                    maybe_next = changes.next() => {
+                        match maybe_next {
+                            Some(Ok(param_arc)) => {
+                                if let Ok(map) = param_arc.get_values::<HashMap<String, indi::Number>>() {
+                                    if let (Some(ra), Some(dec)) = (map.get("RA"), map.get("DEC")) {
+                                        let _ = output
+                                            .send(Message::Mount(MountMessage::CoordsUpdated {
+                                                ra_hours: ra.value.into(),
+                                                dec_deg: dec.value.into(),
+                                            }))
+                                            .await;
+                                    }
+                                }
+                            }
+                            Some(Err(e)) => {
+                                handle_loss_and_break(&mut output, &format!("stream error: {e}")).await;
+                                break true;
+                            }
+                            None => {
+                                handle_loss_and_break(&mut output, "stream ended").await;
+                                break true;
+                            }
+                        }
+                    }
+
+                    _ = hb.tick() => {
+                        if !tcp_probe(&server_addr).await {
+                            handle_loss_and_break(&mut output, "tcp probe failed").await;
+                            break true;
                         }
                     }
                 }
-                Err(e) => {
-                    let _ = output
-                        .send(Message::IndiError(format!("stream error: {e}")))
-                        .await;
+            };
+
+            // 7) Reconnect loop (constant backoff) — keep going until we succeed
+            if lost {
+                loop {
+                    match connect_to_server(&server_addr).await {
+                        Ok(()) => {
+                            let _ = output
+                                .send(Message::ServerStatus(ServerStatus::Connected))
+                                .await;
+                            break;
+                        } // success; proceed to 'reconnect which will resubscribe
+                        Err(e) => {
+                            println!("Reconnect failed: {}, retrying", e);
+                            time::sleep(Duration::from_millis(RECONNECT_DELAY_MS)).await;
+                        }
+                    }
                 }
             }
+
+            // Loop back to resubscribe with the fresh client
+            continue 'reconnect;
         }
     })
 }

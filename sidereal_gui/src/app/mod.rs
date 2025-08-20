@@ -77,6 +77,7 @@ impl MainWindow {
             self.camera_manager
                 .subscription()
                 .map(|m| Message::ModifyCameras(m)),
+            // self.state.mount.subscription().map(|m| Message::Mount(m)),
         ])
     }
 
@@ -157,7 +158,7 @@ impl MainWindow {
             Message::ConnectedDeviceChange(connected_devices) => {
                 self.connected_devices = connected_devices;
             }
-            Message::IndiError(_) => todo!(),
+            Message::IndiError(err) => self.error_message = Some(err.to_string()),
             Message::ModifyCameras(camera_message) => {
                 self.camera_manager.handle_message(camera_message);
             }
