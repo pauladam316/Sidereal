@@ -69,7 +69,7 @@ impl SetupState {
 
                 crate::config::Config::set_location(lat, lon, alt).await?;
 
-                planetarium_handler::set_location().await?;
+                planetarium_handler::set_site_location().await?;
 
                 Ok(())
             },

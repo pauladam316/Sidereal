@@ -8,6 +8,7 @@ use crate::gui::styles::text_input_style::sidereal_text_input;
 use crate::gui::widgets::mount_steer_button::{
     ButtonDirection, MountMoveMessage, MountSteerButton,
 };
+use crate::model::planetarium_handler;
 #[derive(Debug, Clone)]
 pub enum Message {
     Noop,
@@ -50,6 +51,20 @@ impl MountState {
             Message::CoordsUpdated { ra_hours, dec_deg } => {
                 self.mount_ra = ra_hours.to_string();
                 self.mount_dec = dec_deg.to_string();
+                return Task::perform(
+                    async move {
+                        planetarium_handler::set_mount_position(ra_hours as f32, dec_deg as f32)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    |result| match result {
+                        Ok(_) => MainMessage::Noop, // or whatever message you want on success
+                        Err(e) => {
+                            println!("failed to send mount position to planetarium: {}", e);
+                            MainMessage::Noop
+                        }
+                    },
+                );
             }
             Message::MountMove { index, message } => {
                 return self.mount_steer_buttons[index].update(message);

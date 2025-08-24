@@ -1,5 +1,7 @@
 use once_cell::sync::Lazy;
-use protos::protos::{planetarium_client::PlanetariumClient, SetLocationRequest};
+use protos::protos::{
+    planetarium_client::PlanetariumClient, SetLocationRequest, SetMountLocationRequest,
+};
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::{
@@ -80,7 +82,7 @@ pub async fn launch_planetarium() -> io::Result<()> {
     Ok(())
 }
 
-pub async fn set_location() -> SiderealResult<()> {
+pub async fn set_site_location() -> SiderealResult<()> {
     let guard = GLOBAL_CONFIG.write().await;
     let mut client_lock = PLANETARIUM_CLIENT.lock().await;
     if let Some(client) = client_lock.as_mut() {
@@ -91,6 +93,23 @@ pub async fn set_location() -> SiderealResult<()> {
         };
         let response = client
             .set_location(request)
+            .await
+            .map_err(|e| SiderealError::ServerError(e.to_string()))?;
+        println!("{}", response.into_inner().description);
+    }
+
+    Ok(())
+}
+
+pub async fn set_mount_position(ra_hours: f32, dec_deg: f32) -> SiderealResult<()> {
+    let mut client_lock = PLANETARIUM_CLIENT.lock().await;
+    if let Some(client) = client_lock.as_mut() {
+        let request = SetMountLocationRequest {
+            ra: ra_hours,
+            dec: dec_deg,
+        };
+        let response = client
+            .set_mount_location(request)
             .await
             .map_err(|e| SiderealError::ServerError(e.to_string()))?;
         println!("{}", response.into_inner().description);

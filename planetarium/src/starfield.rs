@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use rand::Rng;
 use std::{f64::consts::PI, path::PathBuf, time::Instant};
 
-use crate::star_catalog::parse_catalog;
+use crate::{events::PlanetariumEvent, star_catalog::parse_catalog};
 
 /// Marker on the root entity
 #[derive(Component)]
@@ -16,19 +16,6 @@ pub struct StarfieldRoot;
 pub struct StarData {
     pub ra: f64,
     pub dec: f64,
-}
-
-/// Events you can send at ANY TIME to jump the sky:
-#[derive(Event)]
-pub struct SetLocationEvent {
-    /// degrees north positive
-    pub lat_deg: f64,
-    /// degrees east positive
-    pub lon_deg: f64,
-}
-#[derive(Event)]
-pub struct SetTimeEvent {
-    pub time: DateTime<Utc>,
 }
 
 #[derive(Resource)]
@@ -71,8 +58,7 @@ impl Plugin for StarfieldPlugin {
     fn build(&self, app: &mut App) {
         app
             // events
-            .add_event::<SetLocationEvent>()
-            .add_event::<SetTimeEvent>()
+            .add_event::<PlanetariumEvent>()
             // startup
             .add_systems(Startup, spawn_starfield)
             // runtime event handlers
@@ -217,43 +203,50 @@ fn spawn_starfield(
 
 /// When you send a SetLocationEvent, recompute `axis` **and** every star’s base position
 pub fn handle_set_location_events(
-    mut ev: EventReader<SetLocationEvent>,
+    mut ev: EventReader<PlanetariumEvent>,
     mut state: ResMut<StarfieldState>,
     mut q: Query<(&StarData, &mut Transform), Without<Camera3d>>,
 ) {
-    for SetLocationEvent { lat_deg, lon_deg } in ev.read() {
-        // update state
-        state.lat_deg = *lat_deg;
-        state.lon_deg = *lon_deg;
+    for evt in ev.read() {
+        if let PlanetariumEvent::SetSiteLocation { lat_deg, lon_deg } = *evt {
+            // update state
+            state.lat_deg = lat_deg;
+            state.lon_deg = lon_deg;
 
-        let lr = lat_deg.to_radians();
-        state.axis = Vec3::new(0.0, lr.sin() as f32, lr.cos() as f32);
+            let lr = lat_deg.to_radians();
+            state.axis = Vec3::new(0.0, lr.sin() as f32, lr.cos() as f32);
 
-        // recompute every star’s initial translation
-        for (data, mut tf) in &mut q {
-            let dir = star_direction(
-                state.spawn_utc,
-                state.lat_deg.to_radians(),
-                state.lon_deg.to_radians(),
-                data.ra,
-                data.dec,
-            );
-            tf.translation = dir * 100_000.0;
+            // recompute every star’s initial translation
+            for (data, mut tf) in &mut q {
+                let dir = star_direction(
+                    state.spawn_utc,
+                    state.lat_deg.to_radians(),
+                    state.lon_deg.to_radians(),
+                    data.ra,
+                    data.dec,
+                );
+                tf.translation = dir * 100_000.0;
+            }
         }
     }
 }
 
 /// When you send a SetTimeEvent, jump the rotation to that UTC
-fn handle_set_time_events(mut ev: EventReader<SetTimeEvent>, mut state: ResMut<StarfieldState>) {
-    for SetTimeEvent { time } in ev.read() {
-        // how many seconds since spawn?
-        let delta_s = (time
-            .signed_duration_since(state.spawn_utc)
-            .num_milliseconds() as f32)
-            * 1e-3;
-        // set base_angle so that angle = rate * delta_s
-        state.base_angle = state.rate * delta_s;
-        state.base_instant = Instant::now();
+fn handle_set_time_events(
+    mut ev: EventReader<PlanetariumEvent>,
+    mut state: ResMut<StarfieldState>,
+) {
+    for evt in ev.read() {
+        if let PlanetariumEvent::SetTime { time } = *evt {
+            // how many seconds since spawn?
+            let delta_s = (time
+                .signed_duration_since(state.spawn_utc)
+                .num_milliseconds() as f32)
+                * 1e-3;
+            // set base_angle so that angle = rate * delta_s
+            state.base_angle = state.rate * delta_s;
+            state.base_instant = Instant::now();
+        }
     }
 }
 

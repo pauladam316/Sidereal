@@ -4,6 +4,7 @@ package planetarium;
 
 service Planetarium {
   rpc SetLocation (SetLocationRequest) returns (SetLocationResponse);
+  rpc SetMountLocation (SetMountLocationRequest) returns (SetMountLocationResponse);
 }
 
 message SetLocationRequest {
@@ -13,5 +14,14 @@ message SetLocationRequest {
 }
 
 message SetLocationResponse {
+  string description = 1;
+}
+
+message SetMountLocationRequest {
+  float RA = 1;
+  float DEC = 2;
+}
+
+message SetMountLocationResponse {
   string description = 1;
 }

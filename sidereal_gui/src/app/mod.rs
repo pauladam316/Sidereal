@@ -139,7 +139,7 @@ impl MainWindow {
                         planetarium_handler::launch_planetarium()
                             .await
                             .map_err(|e| e.to_string())?;
-                        planetarium_handler::set_location()
+                        planetarium_handler::set_site_location()
                             .await
                             .map_err(|e| e.to_string())
                     },
