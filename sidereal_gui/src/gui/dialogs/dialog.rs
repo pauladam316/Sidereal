@@ -1,42 +1,27 @@
 use iced::widget::container::Style;
 use iced::widget::{center, opaque};
-use iced::widget::{column, container, row, text, Button, Stack};
+use iced::widget::{column, container, Stack};
 use iced::{Alignment, Background, Border, Color, Element, Length, Theme};
 
 use crate::gui::styles;
 
 /// Simple error dialog container that overlays `content` with a modal window.
 pub fn dialog<'a, Message>(
-    show: bool,
-    content: impl Into<Element<'a, Message>> + 'a,
-    error_text: impl Into<Element<'a, Message>> + 'a,
-    dismiss_button: Button<'a, Message>,
+    background_content: impl Into<Element<'a, Message>> + 'a,
+    dialog_content: impl Into<Element<'a, Message>> + 'a,
 ) -> Element<'a, Message>
 where
     Message: 'a + Clone,
 {
-    let content = content.into();
-
-    if !show {
-        return content;
-    }
+    let content = background_content.into();
 
     // Construct the overlay dialog
-    let overlay = container(
-        column![
-            text("Error").size(28),
-            error_text.into(),
-            row![dismiss_button].spacing(10).align_y(Alignment::Center),
-        ]
-        .spacing(20)
-        .padding(20)
-        .align_x(Alignment::Center),
-    )
-    .width(Length::from(300))
-    .height(Length::Shrink)
-    .style(dialog_style)
-    .align_x(Alignment::Center)
-    .align_y(Alignment::Center);
+    let overlay = container(dialog_content)
+        .width(Length::from(300))
+        .height(Length::Shrink)
+        .style(dialog_style)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center);
     let overlay_centered = center(overlay);
 
     let backdrop = opaque(

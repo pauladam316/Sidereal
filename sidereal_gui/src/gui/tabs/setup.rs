@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use iced::widget::{column, row, text};
 use iced::{Alignment, Element, Length, Task};
 
@@ -23,21 +25,48 @@ pub enum Field {
 #[derive(Debug, Clone)]
 pub enum BubbleMessagePayload {
     Camera(CameraMessage),
+    AddServer,
 }
 #[derive(Debug, Clone)]
 pub enum Message {
-    SelectServer(&'static str),
-    SelectCity(&'static str),
+    SelectServer(String),
+    SelectCity(String),
     FieldChanged { field: Field, value: String },
     SetLocation,
     ConnectToServer,
+    AddServer { ip: String, port: String },
     Bubble(BubbleMessagePayload),
+}
+
+fn combine_ip_port(ip: &str, port: &str) -> SiderealResult<String> {
+    let ip = ip.trim();
+    let port = port.trim();
+
+    // Validate port
+    let port_num: u16 = port
+        .parse()
+        .map_err(|_| SiderealError::FormatError(format!("Invalid port: `{port}`")))?;
+    if port_num == 0 {
+        return Err(SiderealError::FormatError(
+            "Port must be between 1 and 65535.".into(),
+        ));
+    }
+
+    // Validate IP (strictly IP; not hostname)
+    match ip.parse::<IpAddr>() {
+        Ok(IpAddr::V4(v4)) => Ok(format!("{}:{}", v4, port_num)),
+        Ok(IpAddr::V6(v6)) => Ok(format!("[{}]:{}", v6, port_num)), // bracket IPv6
+        Err(_) => Err(SiderealError::FormatError(format!(
+            "Invalid IP address: `{ip}`"
+        ))),
+    }
 }
 
 #[derive(Default)]
 pub struct SetupState {
-    server_ip: Option<&'static str>,
-    favorite_city: Option<&'static str>,
+    selected_server_ip: Option<String>,
+    server_ip_list: Vec<String>,
+    favorite_city: Option<String>,
     pub latitude: String,
     pub longitude: String,
     pub altitude: String,
@@ -47,6 +76,7 @@ impl SetupState {
         self.latitude = config.location.latitude.to_string();
         self.longitude = config.location.longitude.to_string();
         self.altitude = config.location.altitude.to_string();
+        self.selected_server_ip = config.server.clone();
     }
 
     pub fn set_location(&mut self) -> Task<MainMessage> {
@@ -82,7 +112,9 @@ impl SetupState {
 
     pub fn update(&mut self, message: Message) -> Task<MainMessage> {
         match message {
-            Message::SelectServer(server_ip) => self.server_ip = Some(server_ip),
+            Message::SelectServer(server_ip) => {
+                self.selected_server_ip = Some(server_ip.to_owned())
+            }
             Message::SelectCity(_) => todo!(),
             Message::FieldChanged { field, value } => match field {
                 Field::Latitude => self.latitude = value,
@@ -91,7 +123,7 @@ impl SetupState {
             },
             Message::SetLocation {} => return self.set_location(),
             Message::ConnectToServer => {
-                let ip = self.server_ip.clone();
+                let ip = self.selected_server_ip.clone();
 
                 let announce_connecting =
                     Task::done(MainMessage::ServerStatus(ServerStatus::Connecting));
@@ -113,21 +145,31 @@ impl SetupState {
                 return Task::batch(vec![announce_connecting, do_connect]);
             }
             Message::Bubble(_) => {}
+            Message::AddServer { ip, port } => match combine_ip_port(&ip, &port) {
+                Ok(ip) => {
+                    self.server_ip_list.push(ip.clone());
+                    self.selected_server_ip = Some(ip);
+                }
+                Err(error) => {
+                    return Task::done(MainMessage::ErrorOccurred(error));
+                }
+            },
         }
         Task::none()
     }
 
     pub fn view<'a>(&'a self, camera_manager: &'a CameraManager) -> Element<'a, Message> {
-        let server_ips: [&'static str; 2] = ["127.0.0.1:7624", "test"];
-        let cities: [&'static str; 1] = ["Arlington, VA"];
+        let cities: [String; 1] = ["Arlington, VA".to_owned()];
 
-        let pick = sidereal_picklist(server_ips.to_vec(), self.server_ip, |m| {
-            Message::SelectServer(m)
-        })
+        let pick = sidereal_picklist(
+            self.server_ip_list.clone(),
+            self.selected_server_ip.clone(),
+            |m| Message::SelectServer(m),
+        )
         .placeholder("Select server")
         .width(Length::Fill);
 
-        let location_pick = sidereal_picklist(cities.to_vec(), self.favorite_city, |m| {
+        let location_pick = sidereal_picklist(cities.to_vec(), self.favorite_city.clone(), |m| {
             Message::SelectCity(m)
         })
         .placeholder("Select city")
@@ -139,7 +181,8 @@ impl SetupState {
                     row![
                         text("Server"),
                         pick,
-                        sidereal_button(text("Add")).on_press(Message::SelectServer("placeholder")),
+                        sidereal_button(text("Add"))
+                            .on_press(Message::Bubble(BubbleMessagePayload::AddServer)),
                         sidereal_button(text("Connect")).on_press(Message::ConnectToServer)
                     ]
                     .align_y(Alignment::Center)

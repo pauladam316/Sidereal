@@ -18,4 +18,6 @@ pub enum SiderealError {
     PlanetariumError(String),
     #[error("ServerConnectionError: {0}")]
     ServerConnectionError(String),
+    #[error("FormatError: {0}")]
+    FormatError(String),
 }

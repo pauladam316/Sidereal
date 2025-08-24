@@ -26,9 +26,9 @@ type SharedIndiClient = Arc<RwLock<Option<Arc<IndiClientInstance>>>>;
 
 pub static INDI_CLIENT: Lazy<SharedIndiClient> = Lazy::new(|| Arc::new(RwLock::new(None)));
 
-pub(crate) async fn connect_to_server(ip_addr: &str) -> SiderealResult<()> {
+pub(crate) async fn connect_to_server(ip_addr: String) -> SiderealResult<()> {
     println!("Connecting");
-    let stream = TcpStream::connect(ip_addr)
+    let stream = TcpStream::connect(ip_addr.clone())
         .await
         .map_err(|e| SiderealError::ServerError(format!("{:?}", e)))?;
 
@@ -429,7 +429,7 @@ pub fn param_watcher() -> impl Stream<Item = Message> {
             // 7) Reconnect loop (constant backoff) — keep going until we succeed
             if lost {
                 loop {
-                    match connect_to_server(&server_addr).await {
+                    match connect_to_server(server_addr.clone()).await {
                         Ok(()) => {
                             let _ = output
                                 .send(Message::ServerStatus(ServerStatus::Connected))

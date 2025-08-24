@@ -33,8 +33,13 @@ pub struct Location {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CameraConfig {}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub location: Location,
+    pub server: Option<String>,
+    pub cameras: Vec<CameraConfig>,
 }
 
 impl Default for Config {
@@ -45,6 +50,8 @@ impl Default for Config {
                 longitude: -73.587090,
                 altitude: 100.0,
             },
+            server: None,
+            cameras: vec![],
         }
     }
 }

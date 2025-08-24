@@ -1,8 +1,9 @@
 use crate::gui::camera_display::{CameraManager, CameraMessage};
+use crate::gui::dialogs::add_server;
+use crate::gui::dialogs::error::error_dialog;
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
-use crate::gui::tabs::setup::BubbleMessagePayload;
-use crate::gui::widgets::dialog::dialog;
+use crate::gui::tabs::setup::{self, BubbleMessagePayload};
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
 use crate::model::indi_server_handler::param_watcher;
 use crate::model::{planetarium_handler, SiderealError};
@@ -38,6 +39,7 @@ pub enum Message {
     ConnectedDeviceChange(ConnectedDevices),
     IndiError(String),
     ModifyCameras(CameraMessage),
+    AddServer(add_server::Message),
 }
 #[derive(Debug, Clone, Default)]
 pub struct ConnectedDevices {
@@ -49,12 +51,16 @@ pub struct ConnectedDevices {
 #[derive(Default)]
 pub struct MainWindow {
     state: MainWindowState,
-    error_message: Option<String>,
+    dialog: Option<DialogType>,
     server_status: ServerStatus,
     connected_devices: ConnectedDevices,
     camera_manager: CameraManager,
 }
 
+pub enum DialogType {
+    Error(String),
+    AddServer(add_server::AddServerDialog),
+}
 impl MainWindow {
     pub fn new() -> (Self, Task<Message>) {
         let app = Self::default();
@@ -102,6 +108,10 @@ impl MainWindow {
                     BubbleMessagePayload::Camera(camera_message) => {
                         return Task::done(Message::ModifyCameras(camera_message))
                     }
+                    BubbleMessagePayload::AddServer => {
+                        self.dialog =
+                            Some(DialogType::AddServer(add_server::AddServerDialog::default()));
+                    }
                 },
                 other => return self.state.setup.update(other),
             },
@@ -127,12 +137,13 @@ impl MainWindow {
                 self.state.setup.on_config_load(config);
             }
             Message::ErrorOccurred(err) => {
-                self.error_message = Some(err.to_string());
+                self.dialog = Some(DialogType::Error(err.to_string()));
+
                 if let SiderealError::ServerConnectionError(_) = err {
                     self.server_status = ServerStatus::Disconnected;
                 }
             }
-            Message::ErrorCleared() => self.error_message = None,
+            Message::ErrorCleared() => self.dialog = None,
             Message::LaunchPlanetarium => {
                 return Task::perform(
                     async {
@@ -158,9 +169,29 @@ impl MainWindow {
             Message::ConnectedDeviceChange(connected_devices) => {
                 self.connected_devices = connected_devices;
             }
-            Message::IndiError(err) => self.error_message = Some(err.to_string()),
+            Message::IndiError(err) => self.dialog = Some(DialogType::Error(err.to_string())),
             Message::ModifyCameras(camera_message) => {
                 self.camera_manager.handle_message(camera_message);
+            }
+            Message::AddServer(child) => {
+                if let Some(DialogType::AddServer(ref mut dialog)) = self.dialog {
+                    match child.clone() {
+                        add_server::Message::Cancel => {
+                            self.dialog = None;
+                            return Task::none();
+                        }
+                        add_server::Message::Submit { ip, port } => {
+                            self.dialog = None;
+                            return self
+                                .state
+                                .setup
+                                .update(setup::Message::AddServer { ip, port });
+                        }
+                        _ => {
+                            return dialog.update(child).map(Message::AddServer);
+                        }
+                    }
+                }
             }
         }
         Task::none()
@@ -274,16 +305,17 @@ impl MainWindow {
         .padding(10);
 
         // Wrap in dialog if there's an error
-        let view = dialog(
-            self.error_message.is_some(),
-            layout,
-            text(
-                self.error_message
-                    .as_deref()
-                    .unwrap_or("An unknown error occurred"),
-            ),
-            sidereal_button("Dismiss").on_press(Message::ErrorCleared()),
-        );
+
+        let view = match &self.dialog {
+            Some(dialog) => match dialog {
+                DialogType::Error(error_message) => {
+                    error_dialog(layout, error_message.to_string(), Message::ErrorCleared())
+                }
+                DialogType::AddServer(dialog) => dialog.view(layout, Message::AddServer),
+            },
+            None => layout.into(),
+        };
+
         view.into()
     }
 }
