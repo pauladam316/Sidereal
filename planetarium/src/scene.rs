@@ -25,6 +25,7 @@ fn spawn_ground(
     let material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.1, 0.4, 0.1),
         perceptual_roughness: 1.0,
+        unlit: true,
         ..default()
     });
 

@@ -32,7 +32,8 @@ pub fn setup_camera(mut commands: Commands) {
             yaw: 0.0,
             pitch: 0.0,
         },
-        PanAnchor::default(), // <-- add this
+        PanAnchor::default(),
+        Msaa::Sample4,
     ));
 }
 fn signed_angle_around_axis(u: Vec3, v: Vec3, axis: Vec3) -> f32 {
