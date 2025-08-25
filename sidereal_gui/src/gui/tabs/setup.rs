@@ -76,7 +76,8 @@ impl SetupState {
         self.latitude = config.location.latitude.to_string();
         self.longitude = config.location.longitude.to_string();
         self.altitude = config.location.altitude.to_string();
-        self.selected_server_ip = config.server.clone();
+        self.server_ip_list = config.server_list.clone();
+        self.selected_server_ip = config.selected_server.clone();
     }
 
     pub fn set_location(&mut self) -> Task<MainMessage> {
@@ -113,7 +114,20 @@ impl SetupState {
     pub fn update(&mut self, message: Message) -> Task<MainMessage> {
         match message {
             Message::SelectServer(server_ip) => {
-                self.selected_server_ip = Some(server_ip.to_owned())
+                self.selected_server_ip = Some(server_ip.to_owned());
+                let ip_clone = self.selected_server_ip.clone();
+                return Task::perform(
+                    async move {
+                        crate::config::Config::set_selected_server(ip_clone).await?;
+                        Ok(())
+                    },
+                    |result: SiderealResult<()>| match result {
+                        Ok(()) => MainMessage::Noop,
+                        Err(e) => {
+                            MainMessage::ErrorOccurred(SiderealError::ConfigError(e.to_string()))
+                        }
+                    },
+                );
             }
             Message::SelectCity(_) => todo!(),
             Message::FieldChanged { field, value } => match field {
@@ -149,6 +163,19 @@ impl SetupState {
                 Ok(ip) => {
                     self.server_ip_list.push(ip.clone());
                     self.selected_server_ip = Some(ip);
+                    let server_list_clone = self.server_ip_list.clone();
+                    return Task::perform(
+                        async move {
+                            crate::config::Config::update_server_list(server_list_clone).await?;
+                            Ok(())
+                        },
+                        |result: SiderealResult<()>| match result {
+                            Ok(()) => MainMessage::Noop,
+                            Err(e) => MainMessage::ErrorOccurred(SiderealError::ConfigError(
+                                e.to_string(),
+                            )),
+                        },
+                    );
                 }
                 Err(error) => {
                     return Task::done(MainMessage::ErrorOccurred(error));

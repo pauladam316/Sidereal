@@ -38,7 +38,8 @@ pub struct CameraConfig {}
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub location: Location,
-    pub server: Option<String>,
+    pub server_list: Vec<String>,
+    pub selected_server: Option<String>,
     pub cameras: Vec<CameraConfig>,
 }
 
@@ -50,8 +51,9 @@ impl Default for Config {
                 longitude: -73.587090,
                 altitude: 100.0,
             },
-            server: None,
+            server_list: vec![],
             cameras: vec![],
+            selected_server: None,
         }
     }
 }
@@ -112,6 +114,20 @@ impl Config {
             guard.location.latitude = latitude;
             guard.location.longitude = longitude;
             guard.location.altitude = altitude;
+        }
+        Config::persist().await
+    }
+    pub async fn update_server_list(server_list: Vec<String>) -> SiderealResult<()> {
+        {
+            let mut guard = GLOBAL_CONFIG.write().await;
+            guard.server_list = server_list;
+        }
+        Config::persist().await
+    }
+    pub async fn set_selected_server(selected_server: Option<String>) -> SiderealResult<()> {
+        {
+            let mut guard = GLOBAL_CONFIG.write().await;
+            guard.selected_server = selected_server;
         }
         Config::persist().await
     }
