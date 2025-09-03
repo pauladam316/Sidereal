@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 prost = "0.14.1"
+prost-types = "0.14.0"
 tonic = {version = "0.14.0", features = ["transport"]}
 tonic-prost = "0.14.0"
 

@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+package gui;
+
+service Sidereal {
+  rpc SetTrackingTarget (SetTrackingTargetRequest) returns (SetTrackingTargetResponse);
+}
+
+message SetTrackingTargetRequest {
+  oneof tracking_type {
+    GenericTrack generic_track = 1;
+    SatTrack sat_track = 2;
+  }
+}
+
+message GenericTrack {
+  float ra_hours = 1;
+  float dec_degrees = 2;
+  google.protobuf.Timestamp time = 3;
+}
+
+message SatTrack {
+//todo: this should be a TLE reference
+  float ra_hours = 1;
+  float dec_degrees = 2;
+}
+
+
+message SetTrackingTargetResponse {
+  string description = 1;
+}

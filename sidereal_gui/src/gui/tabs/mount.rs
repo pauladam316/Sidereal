@@ -8,7 +8,7 @@ use crate::gui::styles::text_input_style::sidereal_text_input;
 use crate::gui::widgets::mount_steer_button::{
     ButtonDirection, MountMoveMessage, MountSteerButton,
 };
-use crate::model::planetarium_handler;
+use crate::planetarium_handler::planetarium_sender;
 #[derive(Debug, Clone)]
 pub enum Message {
     Noop,
@@ -53,7 +53,7 @@ impl MountState {
                 self.mount_dec = dec_deg.to_string();
                 return Task::perform(
                     async move {
-                        planetarium_handler::set_mount_position(ra_hours as f32, dec_deg as f32)
+                        planetarium_sender::set_mount_position(ra_hours as f32, dec_deg as f32)
                             .await
                             .map_err(|e| e.to_string())
                     },

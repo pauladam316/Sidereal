@@ -12,7 +12,8 @@ use crate::gui::styles::picklist_style::sidereal_picklist;
 use crate::gui::styles::text_input_style::sidereal_text_input;
 use crate::gui::widgets::server_status::ServerStatus;
 
-use crate::model::{indi_server_handler, planetarium_handler, SiderealError, SiderealResult};
+use crate::model::{indi_server_handler, SiderealError, SiderealResult};
+use crate::planetarium_handler::planetarium_sender;
 
 #[derive(Debug, Clone)]
 pub enum Field {
@@ -100,7 +101,7 @@ impl SetupState {
 
                 crate::config::Config::set_location(lat, lon, alt).await?;
 
-                planetarium_handler::set_site_location().await?;
+                planetarium_sender::set_site_location().await?;
 
                 Ok(())
             },

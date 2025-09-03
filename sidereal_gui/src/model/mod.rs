@@ -1,7 +1,8 @@
 use thiserror::Error;
 
 pub(crate) mod indi_server_handler;
-pub(crate) mod planetarium_handler;
+
+pub(crate) mod tracking_manager;
 
 pub type SiderealResult<T> = Result<T, SiderealError>;
 
@@ -20,4 +21,6 @@ pub enum SiderealError {
     ServerConnectionError(String),
     #[error("FormatError: {0}")]
     FormatError(String),
+    #[error("gRPC Error: {0}")]
+    GrpcError(String),
 }

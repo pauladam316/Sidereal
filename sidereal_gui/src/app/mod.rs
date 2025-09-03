@@ -6,7 +6,8 @@ use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::tabs::setup::{self, BubbleMessagePayload};
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
 use crate::model::indi_server_handler::param_watcher;
-use crate::model::{planetarium_handler, SiderealError};
+use crate::model::SiderealError;
+use crate::planetarium_handler::planetarium_sender;
 use crate::{
     config::Config,
     gui::{
@@ -147,10 +148,10 @@ impl MainWindow {
             Message::LaunchPlanetarium => {
                 return Task::perform(
                     async {
-                        planetarium_handler::launch_planetarium()
+                        planetarium_sender::launch_planetarium()
                             .await
                             .map_err(|e| e.to_string())?;
-                        planetarium_handler::set_site_location()
+                        planetarium_sender::set_site_location()
                             .await
                             .map_err(|e| e.to_string())
                     },
