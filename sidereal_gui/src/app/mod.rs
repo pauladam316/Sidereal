@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::gui::camera_display::{CameraManager, CameraMessage};
 use crate::gui::dialogs::add_server;
 use crate::gui::dialogs::error::error_dialog;
@@ -7,7 +9,7 @@ use crate::gui::tabs::setup::{self, BubbleMessagePayload};
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
 use crate::model::indi_server_handler::param_watcher;
 use crate::model::SiderealError;
-use crate::planetarium_handler::planetarium_sender;
+use crate::planetarium_handler::{planetarium_receiver, planetarium_sender};
 use crate::{
     config::Config,
     gui::{
@@ -15,11 +17,41 @@ use crate::{
         tabs::{self, MainWindowState, Tab},
     },
 };
+use iced::futures::SinkExt;
 use iced::widget::container;
 use iced::widget::{column, row, scrollable, Column, Space};
 use iced::Alignment::{self};
-use iced::Subscription;
+use iced::{stream, Subscription};
 use iced::{widget::text, Element, Length, Task};
+use once_cell::sync::OnceCell;
+use planetarium_receiver::ForwardedRPC;
+use tokio::sync::{mpsc, Mutex};
+
+static RPC_RX: OnceCell<Arc<Mutex<Option<mpsc::UnboundedReceiver<ForwardedRPC>>>>> =
+    OnceCell::new();
+
+pub fn set_grpc_receiver(rx: mpsc::UnboundedReceiver<ForwardedRPC>) {
+    let _ = RPC_RX.set(Arc::new(Mutex::new(Some(rx))));
+}
+
+fn rpc_subscription_worker() -> impl iced::futures::Stream<Item = Message> {
+    stream::channel(256, |mut output| async move {
+        // If the receiver hasn't been set, just end the worker quietly.
+        let Some(holder) = RPC_RX.get().cloned() else {
+            return; // no stream; nothing to forward
+        };
+
+        let mut rx_opt = holder.lock().await.take();
+
+        if let Some(ref mut rx) = rx_opt {
+            while let Some(evt) = rx.recv().await {
+                if output.send(Message::ForwardedRPC(evt)).await.is_err() {
+                    break; // UI dropped
+                }
+            }
+        }
+    })
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -41,6 +73,7 @@ pub enum Message {
     IndiError(String),
     ModifyCameras(CameraMessage),
     AddServer(add_server::Message),
+    ForwardedRPC(ForwardedRPC),
 }
 #[derive(Debug, Clone, Default)]
 pub struct ConnectedDevices {
@@ -78,13 +111,12 @@ impl MainWindow {
 
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch(vec![
-            // your existing stream
             Subscription::run_with_id("coords_subscription", param_watcher()),
-            // the camera stream
             self.camera_manager
                 .subscription()
-                .map(|m| Message::ModifyCameras(m)),
-            // self.state.mount.subscription().map(|m| Message::Mount(m)),
+                .map(Message::ModifyCameras),
+            // NEW: gRPC → mpsc → Iced
+            Subscription::run_with_id("grpc-forwarded-rpc", rpc_subscription_worker()),
         ])
     }
 
@@ -193,6 +225,9 @@ impl MainWindow {
                         }
                     }
                 }
+            }
+            Message::ForwardedRPC(RPC) => {
+                println!("test message received");
             }
         }
         Task::none()

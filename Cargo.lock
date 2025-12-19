@@ -5806,6 +5806,7 @@ dependencies = [
  "byteorder",
  "chrono",
  "meshtext",
+ "prost-types",
  "protos",
  "rand 0.8.5",
  "tokio",

@@ -1,6 +1,7 @@
 // Cargo.toml
 // src/main.rs
 mod camera;
+mod client;
 mod events;
 mod scene;
 mod server;
@@ -30,6 +31,19 @@ struct EventChannelReceiver(pub Mutex<Receiver<PlanetariumEvent>>);
 fn main() {
     // build the std channel
     let (event_tx, event_rx): (Sender<PlanetariumEvent>, Receiver<PlanetariumEvent>) = channel();
+
+    // spawn gRPC client for testing
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            // wait a bit for server to come up
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+            if let Err(e) = client::send_event("hello from client".to_string()).await {
+                eprintln!("Client error: {e:?}");
+            }
+        });
+    });
 
     // spawn gRPC server, handing off loc_tx…
     std::thread::spawn(move || {
