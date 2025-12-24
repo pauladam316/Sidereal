@@ -209,19 +209,19 @@ where
                             heater2_on: heater2_state.map(|s| s != 0).unwrap_or(false),
                             heater3_on: heater3_state.map(|s| s != 0).unwrap_or(false),
                             lens_cap_manual_override: lens_cap_manual
-                                .map(|s| s != 0)
+                                .map(|s| s == 0 || s == 1)
                                 .unwrap_or(false),
                             flat_light_manual_override: flat_light_manual
-                                .map(|s| s != 0)
+                                .map(|s| s == 0 || s == 1)
                                 .unwrap_or(false),
                             heater1_manual_override: heater1_manual
-                                .map(|s| s != 0)
+                                .map(|s| s == 0 || s == 1)
                                 .unwrap_or(false),
                             heater2_manual_override: heater2_manual
-                                .map(|s| s != 0)
+                                .map(|s| s == 0 || s == 1)
                                 .unwrap_or(false),
                             heater3_manual_override: heater3_manual
-                                .map(|s| s != 0)
+                                .map(|s| s == 0 || s == 1)
                                 .unwrap_or(false),
                         }))
                         .await;
