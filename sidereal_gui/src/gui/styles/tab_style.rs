@@ -36,35 +36,41 @@ pub fn tab_button<'a, Message>(label: &'a str, active: bool) -> Button<'a, Messa
 where
     Message: 'a + Clone,
 {
-    button(text(label).width(Length::Fill).size(14).center()).style(
-        move |_theme: &Theme, status| {
-            let hovered = matches!(status, Status::Hovered);
-            iced::widget::button::Style {
-                background: Some(Background::Color(match active {
-                    true => styles::TAB_BACKGROUND_COLOR,
-                    false => styles::INACTIVE_TAB_COLOR,
-                })),
-
-                text_color: match active || hovered {
-                    true => styles::ACCENT_COLOR,
-                    false => styles::TEXT_COLOR,
-                },
-                shadow: iced::Shadow {
-                    offset: iced::Vector::new(2.0, 2.0),
-                    color: Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 0.5,
-                    }, // soft drop shadow
-                    blur_radius: 2.0,
-                },
-                border: Border {
-                    color: Color::TRANSPARENT,
-                    width: 0.0,
-                    radius: 2.0.into(),
-                },
-            }
-        },
+    button(
+        container(text(label).size(14).center())
+            .clip(true)
+            .width(Length::Fill)
+            .height(Length::Fixed(25.0)) // Force height to prevent wrapping - text will clip instead
+            .align_x(iced::Alignment::Center)
+            .align_y(iced::Alignment::Center),
     )
+    .style(move |_theme: &Theme, status| {
+        let hovered = matches!(status, Status::Hovered);
+        iced::widget::button::Style {
+            background: Some(Background::Color(match active {
+                true => styles::TAB_BACKGROUND_COLOR,
+                false => styles::INACTIVE_TAB_COLOR,
+            })),
+
+            text_color: match active || hovered {
+                true => styles::ACCENT_COLOR,
+                false => styles::TEXT_COLOR,
+            },
+            shadow: iced::Shadow {
+                offset: iced::Vector::new(2.0, 2.0),
+                color: Color {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 0.5,
+                }, // soft drop shadow
+                blur_radius: 2.0,
+            },
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: 2.0.into(),
+            },
+        }
+    })
 }

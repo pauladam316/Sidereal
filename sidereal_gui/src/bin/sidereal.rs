@@ -13,7 +13,33 @@ fn main() -> iced::Result {
     env_logger::init();
     std::panic::set_hook(Box::new(|info| eprintln!("PANIC: {info}")));
 
-    gst::init().unwrap();
+    // On macOS, help GStreamer find its plugins
+    #[cfg(target_os = "macos")]
+    {
+        use std::path::PathBuf;
+        let plugin_paths = vec![
+            "/opt/homebrew/lib/gstreamer-1.0",  // Apple Silicon Homebrew
+            "/usr/local/lib/gstreamer-1.0",     // Intel Homebrew
+        ];
+        
+        for path in plugin_paths {
+            if PathBuf::from(path).exists() {
+                if let Ok(current) = std::env::var("GST_PLUGIN_PATH") {
+                    std::env::set_var("GST_PLUGIN_PATH", format!("{}:{}", path, current));
+                } else {
+                    std::env::set_var("GST_PLUGIN_PATH", path);
+                }
+                break;
+            }
+        }
+    }
+
+    gst::init().unwrap_or_else(|e| {
+        eprintln!("Failed to initialize GStreamer: {}", e);
+        eprintln!("On macOS, make sure GStreamer is installed via Homebrew:");
+        eprintln!("  brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav");
+        std::process::exit(1);
+    });
 
     let (tx, rx) = mpsc::unbounded_channel::<ForwardedRPC>();
     std::thread::spawn(move || {

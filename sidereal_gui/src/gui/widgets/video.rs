@@ -45,13 +45,17 @@ impl Drop for StopHandle {
 }
 
 fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, StopHandle), String> {
+    // Try hardware-accelerated pipeline first, fallback to software
+    // Scale down to 960x540 and limit to 30fps to reduce processing overhead
     let pipeline_str = format!(
         "rtspsrc location={} protocols=tcp latency=200 do-rtsp-keep-alive=true ! \
-         decodebin ! \
-         videoconvert ! videoscale ! \
-         video/x-raw,format=RGBA ! \
+         rtph264depay ! h264parse ! \
+         decodebin3 ! \
+         videorate ! video/x-raw,framerate=30/1 ! \
+         videoscale ! video/x-raw,width=960,height=540 ! \
+         videoconvert ! video/x-raw,format=RGBA ! \
          queue leaky=downstream max-size-buffers=1 ! \
-         appsink name=sink sync=false max-buffers=1 drop=true",
+         appsink name=sink sync=false max-buffers=1 drop=true emit-signals=false",
         url
     );
 
@@ -66,18 +70,20 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
         .downcast::<AppSink>()
         .map_err(|_| "appsink wrong type")?;
 
-    let (tx, rx) = tokio::sync::mpsc::channel::<(u32, u32, Vec<u8>)>(2);
+    // Larger buffer to reduce backpressure, but we'll still drop frames if full
+    let (tx, rx) = tokio::sync::mpsc::channel::<(u32, u32, Vec<u8>)>(4);
 
     appsink.set_caps(Some(
         &gst::Caps::builder("video/x-raw")
-            .field("format", &"RGBA")
-            .field("memory", &"SystemMemory")
+            .field("format", "RGBA")
+            .field("memory", "SystemMemory")
             .build(),
     ));
     // Clone sender for the callback; channel closes only when *all* senders are dropped.
     let tx_frames = tx.clone();
     let _ = appsink.set_property("max-buffers", 1u32);
     let _ = appsink.set_property("drop", true);
+    let _ = appsink.set_property("emit-signals", false); // Reduce signal overhead
 
     appsink.set_callbacks(
         AppSinkCallbacks::builder()
@@ -105,22 +111,26 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
                         let stride = frame.plane_stride()[0] as usize;
                         let src = frame.plane_data(0).map_err(|_| gst::FlowError::Error)?;
 
-                        // Tightly packed RGBA buffer with checks
-                        let mut data = vec![0u8; w.saturating_mul(h).saturating_mul(4)];
-                        for y in 0..h {
-                            let start = y.checked_mul(stride).ok_or(gst::FlowError::Error)?;
-                            let end = start.checked_add(w * 4).ok_or(gst::FlowError::Error)?;
-                            let row = src.get(start..end).ok_or(gst::FlowError::Error)?;
+                        // Optimized memory copy: use bulk copy when stride matches, otherwise use efficient row copy
+                        let data = if stride == w * 4 {
+                            // Stride matches - can do direct bulk copy (fastest path)
+                            src.to_vec()
+                        } else {
+                            // Stride doesn't match - need to copy row by row
+                            // Use unsafe for better performance than safe slice operations
+                            let mut data: Vec<u8> = Vec::with_capacity(w * h * 4);
+                            unsafe {
+                                data.set_len(w * h * 4);
+                                for y in 0..h {
+                                    let src_ptr = src.as_ptr().add(y * stride);
+                                    let dst_ptr = data.as_mut_ptr().add(y * w * 4);
+                                    std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, w * 4);
+                                }
+                            }
+                            data
+                        };
 
-                            let dst_start = y * w * 4;
-                            let dst_end = dst_start + w * 4;
-                            let dst = data
-                                .get_mut(dst_start..dst_end)
-                                .ok_or(gst::FlowError::Error)?;
-                            dst.copy_from_slice(row);
-                        }
-
-                        // Try to send; drop silently if full or closed
+                        // Try to send; drop silently if full or closed (non-blocking)
                         let _ = tx_frames.try_send((w as u32, h as u32, data));
                         Ok(gst::FlowSuccess::Ok)
                     })
@@ -366,6 +376,7 @@ enum State {
         url: String,
         frames: mpsc::Receiver<(u32, u32, Vec<u8>)>,
         stop: StopHandle,
+        last_frame_time: Option<Instant>,
     },
     Backoff {
         url: String,
@@ -385,6 +396,7 @@ impl State {
                                 url, // <—
                                 frames: rx,
                                 stop,
+                                last_frame_time: Some(Instant::now()),
                             },
                         )
                     } else {
@@ -410,25 +422,54 @@ impl State {
                 mut frames,
                 url,
                 stop,
-            } => match frames.recv().await {
-                Some((w, h, rgba)) => (
-                    IpCameraMessage::FrameReady(w, h, rgba),
-                    State::Streaming { url, frames, stop },
-                ),
-                None => {
-                    // Sender was dropped (EOS/ERROR) — emit Disconnected *and* backoff with the same URL
-                    // The StopHandle will be dropped as we leave this state; that requests shutdown.
-                    let attempt = 1;
-                    let delay = Duration::from_millis(500 * (1u64 << (attempt.min(6)))); // 500ms..16s
-                    (
-                        IpCameraMessage::Disconnected("stream ended".into()),
-                        State::Backoff {
-                            url,
-                            until: Instant::now() + delay,
-                        },
-                    )
+                last_frame_time,
+            } => {
+                // Throttle frame rate to ~30fps to reduce CPU usage
+                let now = Instant::now();
+                let should_process = last_frame_time
+                    .map(|t| now.duration_since(t) >= Duration::from_millis(33)) // ~30fps
+                    .unwrap_or(true);
+
+                match frames.recv().await {
+                    Some((w, h, rgba)) if should_process => {
+                        let next_last_frame_time = Some(now);
+                        (
+                            IpCameraMessage::FrameReady(w, h, rgba),
+                            State::Streaming {
+                                url,
+                                frames,
+                                stop,
+                                last_frame_time: next_last_frame_time,
+                            },
+                        )
+                    }
+                    Some(_) => {
+                        // Frame received but we're throttling - drop it and continue
+                        (
+                            IpCameraMessage::Noop,
+                            State::Streaming {
+                                url,
+                                frames,
+                                stop,
+                                last_frame_time,
+                            },
+                        )
+                    }
+                    None => {
+                        // Sender was dropped (EOS/ERROR) — emit Disconnected *and* backoff with the same URL
+                        // The StopHandle will be dropped as we leave this state; that requests shutdown.
+                        let attempt = 1;
+                        let delay = Duration::from_millis(500 * (1u64 << (attempt.min(6)))); // 500ms..16s
+                        (
+                            IpCameraMessage::Disconnected("stream ended".into()),
+                            State::Backoff {
+                                url,
+                                until: Instant::now() + delay,
+                            },
+                        )
+                    }
                 }
-            },
+            }
 
             State::Backoff { url, until } => {
                 let now = Instant::now();

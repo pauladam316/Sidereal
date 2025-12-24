@@ -12,7 +12,8 @@ use crate::gui::styles::picklist_style::sidereal_picklist;
 use crate::gui::styles::text_input_style::sidereal_text_input;
 use crate::gui::widgets::server_status::ServerStatus;
 
-use crate::model::{indi_server_handler, SiderealError, SiderealResult};
+use crate::indi_handler;
+use crate::model::{SiderealError, SiderealResult};
 use crate::planetarium_handler::planetarium_sender;
 
 #[derive(Debug, Clone)]
@@ -145,7 +146,7 @@ impl SetupState {
 
                 let do_connect = Task::perform(
                     async move {
-                        indi_server_handler::connect_to_server(ip.ok_or("No server IP selected")?)
+                        indi_handler::connect_to_server(ip.ok_or("No server IP selected")?)
                             .await
                             .map_err(|e| e.to_string())
                     },

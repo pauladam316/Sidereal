@@ -1,0 +1,482 @@
+use crate::app::Message as MainMessage;
+use crate::gui::styles::button_style::sidereal_button;
+use crate::gui::styles::container_style::{content_container, ContainerLayer};
+use crate::gui::styles::text_input_style::sidereal_readonly_text;
+use crate::gui::widgets::live_plot::{create_live_plot, DataPoint, LivePlot};
+use crate::indi_handler::telescope_controller;
+use crate::model::SiderealResult;
+use iced::widget::{column, container, row, text};
+use iced::{Alignment, Color, Element, Length, Task};
+use std::time::SystemTime;
+
+#[derive(Debug, Clone)]
+pub enum Message {
+    Noop,
+    TelemetryUpdate {
+        ambient_temp: f64,
+        heater1_temp: f64,
+        heater2_temp: f64,
+        heater3_temp: f64,
+        lens_cap_open: bool,
+        flat_light_on: bool,
+        heater1_on: bool,
+        heater2_on: bool,
+        heater3_on: bool,
+        lens_cap_manual_override: bool,
+        flat_light_manual_override: bool,
+        heater1_manual_override: bool,
+        heater2_manual_override: bool,
+        heater3_manual_override: bool,
+    },
+    LensCapOpen,
+    LensCapClose,
+    FlatLightOn,
+    FlatLightOff,
+    Heater1Enable,
+    Heater1Disable,
+    Heater2Enable,
+    Heater2Disable,
+    Heater3Enable,
+    Heater3Disable,
+}
+
+pub struct TelescopeState {
+    plot: LivePlot,
+    // Series indices for the plot
+    ambient_series: usize,
+    heater1_series: usize,
+    heater2_series: usize,
+    heater3_series: usize,
+    start_time: SystemTime,
+    // Current telemetry values
+    ambient_temp: f64,
+    heater1_temp: f64,
+    heater2_temp: f64,
+    heater3_temp: f64,
+    lens_cap_open: bool,
+    flat_light_on: bool,
+    heater1_on: bool,
+    heater2_on: bool,
+    heater3_on: bool,
+    lens_cap_manual_override: bool,
+    flat_light_manual_override: bool,
+    heater1_manual_override: bool,
+    heater2_manual_override: bool,
+    heater3_manual_override: bool,
+}
+
+impl Default for TelescopeState {
+    fn default() -> Self {
+        let mut plot = create_live_plot(500, 20.0); // 500 points max, 20px padding
+
+        // Add temperature series for telescope telemetry
+        let ambient_series = plot.add_series("Ambient", Color::from_rgb(0.3, 0.7, 1.0));
+        let heater1_series = plot.add_series("Heater 1", Color::from_rgb(1.0, 0.3, 0.3));
+        let heater2_series = plot.add_series("Heater 2", Color::from_rgb(1.0, 0.6, 0.3));
+        let heater3_series = plot.add_series("Heater 3", Color::from_rgb(0.3, 1.0, 0.3));
+
+        Self {
+            plot,
+            ambient_series,
+            heater1_series,
+            heater2_series,
+            heater3_series,
+            start_time: SystemTime::now(),
+            ambient_temp: 0.0,
+            heater1_temp: 0.0,
+            heater2_temp: 0.0,
+            heater3_temp: 0.0,
+            lens_cap_open: false,
+            flat_light_on: false,
+            heater1_on: false,
+            heater2_on: false,
+            heater3_on: false,
+            lens_cap_manual_override: false,
+            flat_light_manual_override: false,
+            heater1_manual_override: false,
+            heater2_manual_override: false,
+            heater3_manual_override: false,
+        }
+    }
+}
+
+impl TelescopeState {
+    pub fn update(&mut self, message: Message) -> Task<MainMessage> {
+        match message {
+            Message::Noop => Task::none(),
+            Message::TelemetryUpdate {
+                ambient_temp,
+                heater1_temp,
+                heater2_temp,
+                heater3_temp,
+                lens_cap_open,
+                flat_light_on,
+                heater1_on,
+                heater2_on,
+                heater3_on,
+                lens_cap_manual_override,
+                flat_light_manual_override,
+                heater1_manual_override,
+                heater2_manual_override,
+                heater3_manual_override,
+            } => {
+                self.ambient_temp = ambient_temp;
+                self.heater1_temp = heater1_temp;
+                self.heater2_temp = heater2_temp;
+                self.heater3_temp = heater3_temp;
+                self.lens_cap_open = lens_cap_open;
+                self.flat_light_on = flat_light_on;
+                self.heater1_on = heater1_on;
+                self.heater2_on = heater2_on;
+                self.heater3_on = heater3_on;
+                self.lens_cap_manual_override = lens_cap_manual_override;
+                self.flat_light_manual_override = flat_light_manual_override;
+                self.heater1_manual_override = heater1_manual_override;
+                self.heater2_manual_override = heater2_manual_override;
+                self.heater3_manual_override = heater3_manual_override;
+
+                // Update plot with new temperature data
+                let timestamp = self.start_time.elapsed().unwrap_or_default().as_secs_f64();
+                self.plot.add_data_point(
+                    self.ambient_series,
+                    DataPoint {
+                        timestamp,
+                        value: ambient_temp,
+                    },
+                );
+                self.plot.add_data_point(
+                    self.heater1_series,
+                    DataPoint {
+                        timestamp,
+                        value: heater1_temp,
+                    },
+                );
+                self.plot.add_data_point(
+                    self.heater2_series,
+                    DataPoint {
+                        timestamp,
+                        value: heater2_temp,
+                    },
+                );
+                self.plot.add_data_point(
+                    self.heater3_series,
+                    DataPoint {
+                        timestamp,
+                        value: heater3_temp,
+                    },
+                );
+
+                Task::none()
+            }
+            Message::LensCapOpen => Task::perform(
+                async { telescope_controller::set_lens_cap(true).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::LensCapClose => Task::perform(
+                async { telescope_controller::set_lens_cap(false).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::FlatLightOn => Task::perform(
+                async { telescope_controller::set_flat_light(true).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::FlatLightOff => Task::perform(
+                async { telescope_controller::set_flat_light(false).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::Heater1Enable => Task::perform(
+                async { telescope_controller::set_heater1(true).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::Heater1Disable => Task::perform(
+                async { telescope_controller::set_heater1(false).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::Heater2Enable => Task::perform(
+                async { telescope_controller::set_heater2(true).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::Heater2Disable => Task::perform(
+                async { telescope_controller::set_heater2(false).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::Heater3Enable => Task::perform(
+                async { telescope_controller::set_heater3(true).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+            Message::Heater3Disable => Task::perform(
+                async { telescope_controller::set_heater3(false).await },
+                |result: SiderealResult<()>| match result {
+                    Ok(_) => MainMessage::Noop,
+                    Err(e) => MainMessage::ErrorOccurred(e),
+                },
+            ),
+        }
+    }
+    pub fn view(&self) -> Element<'static, Message> {
+        let lens_cap_state_text = if self.lens_cap_open { "Open" } else { "Closed" };
+        let flat_light_state_text = if self.flat_light_on { "On" } else { "Off" };
+        let heater1_state_text = if self.heater1_on { "On" } else { "Off" };
+        let heater2_state_text = if self.heater2_on { "On" } else { "Off" };
+        let heater3_state_text = if self.heater3_on { "On" } else { "Off" };
+        let heater1_status_text = if self.heater1_on {
+            "Enabled"
+        } else {
+            "Disabled"
+        };
+        let heater2_status_text = if self.heater2_on {
+            "Enabled"
+        } else {
+            "Disabled"
+        };
+        let heater3_status_text = if self.heater3_on {
+            "Enabled"
+        } else {
+            "Disabled"
+        };
+
+        let layout = column![
+            content_container(
+                column![
+                    text("Lens Cap"),
+                    row![
+                        sidereal_button(
+                            container(text("Open"))
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center)
+                        )
+                        .width(Length::Fill)
+                        .on_press(Message::LensCapOpen),
+                        sidereal_button(
+                            container(text("Close"))
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center)
+                        )
+                        .width(Length::Fill)
+                        .on_press(Message::LensCapClose),
+                        text("State:"),
+                        sidereal_readonly_text(lens_cap_state_text).width(Length::Fill),
+                        text("Manual Override:"),
+                        sidereal_readonly_text(if self.lens_cap_manual_override {
+                            "Enabled"
+                        } else {
+                            "Disabled"
+                        })
+                        .width(Length::Fill),
+                    ]
+                    .align_y(Alignment::Center)
+                    .spacing(10)
+                    .width(Length::Fill)
+                ]
+                .spacing(10),
+                ContainerLayer::Layer1
+            )
+            .width(Length::Fill),
+            content_container(
+                column![
+                    text("Flat Light"),
+                    row![
+                        sidereal_button(
+                            container(text("On"))
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center)
+                        )
+                        .width(Length::Fill)
+                        .on_press(Message::FlatLightOn),
+                        sidereal_button(
+                            container(text("Off"))
+                                .width(Length::Fill)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center)
+                        )
+                        .width(Length::Fill)
+                        .on_press(Message::FlatLightOff),
+                        text("State:"),
+                        sidereal_readonly_text(flat_light_state_text).width(Length::Fill),
+                        text("Manual Override:"),
+                        sidereal_readonly_text(if self.flat_light_manual_override {
+                            "Enabled"
+                        } else {
+                            "Disabled"
+                        })
+                        .width(Length::Fill),
+                    ]
+                    .align_y(Alignment::Center)
+                    .spacing(10)
+                    .width(Length::Fill)
+                ]
+                .spacing(10),
+                ContainerLayer::Layer1
+            )
+            .width(Length::Fill),
+            content_container(
+                column![
+                    text("Heaters"),
+                    content_container(
+                        column![
+                            text("Heater 1"),
+                            row![
+                                sidereal_button(
+                                    container(text("Enable"))
+                                        .width(Length::Fill)
+                                        .align_x(Alignment::Center)
+                                        .align_y(Alignment::Center)
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Heater1Enable),
+                                sidereal_button(
+                                    container(text("Disable"))
+                                        .width(Length::Fill)
+                                        .align_x(Alignment::Center)
+                                        .align_y(Alignment::Center)
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Heater1Disable),
+                                text("Status:"),
+                                sidereal_readonly_text(heater1_status_text).width(Length::Fill),
+                                text("State:"),
+                                sidereal_readonly_text(heater1_state_text).width(Length::Fill),
+                                text("Manual Override:"),
+                                sidereal_readonly_text(if self.heater1_manual_override {
+                                    "Enabled"
+                                } else {
+                                    "Disabled"
+                                })
+                                .width(Length::Fill),
+                            ]
+                            .align_y(Alignment::Center)
+                            .spacing(10)
+                            .width(Length::Fill)
+                        ]
+                        .spacing(10),
+                        ContainerLayer::Layer2
+                    ),
+                    content_container(
+                        column![
+                            text("Heater 2"),
+                            row![
+                                sidereal_button(
+                                    container(text("Enable"))
+                                        .width(Length::Fill)
+                                        .align_x(Alignment::Center)
+                                        .align_y(Alignment::Center)
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Heater2Enable),
+                                sidereal_button(
+                                    container(text("Disable"))
+                                        .width(Length::Fill)
+                                        .align_x(Alignment::Center)
+                                        .align_y(Alignment::Center)
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Heater2Disable),
+                                text("Status:"),
+                                sidereal_readonly_text(heater2_status_text).width(Length::Fill),
+                                text("State:"),
+                                sidereal_readonly_text(heater2_state_text).width(Length::Fill),
+                                text("Manual Override:"),
+                                sidereal_readonly_text(if self.heater2_manual_override {
+                                    "Enabled"
+                                } else {
+                                    "Disabled"
+                                })
+                                .width(Length::Fill),
+                            ]
+                            .align_y(Alignment::Center)
+                            .spacing(10)
+                            .width(Length::Fill)
+                        ]
+                        .spacing(10),
+                        ContainerLayer::Layer2
+                    ),
+                    content_container(
+                        column![
+                            text("Heater 3"),
+                            row![
+                                sidereal_button(
+                                    container(text("Enable"))
+                                        .width(Length::Fill)
+                                        .align_x(Alignment::Center)
+                                        .align_y(Alignment::Center)
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Heater3Enable),
+                                sidereal_button(
+                                    container(text("Disable"))
+                                        .width(Length::Fill)
+                                        .align_x(Alignment::Center)
+                                        .align_y(Alignment::Center)
+                                )
+                                .width(Length::Fill)
+                                .on_press(Message::Heater3Disable),
+                                text("Status:"),
+                                sidereal_readonly_text(heater3_status_text).width(Length::Fill),
+                                text("State:"),
+                                sidereal_readonly_text(heater3_state_text).width(Length::Fill),
+                                text("Manual Override:"),
+                                sidereal_readonly_text(if self.heater3_manual_override {
+                                    "Enabled"
+                                } else {
+                                    "Disabled"
+                                })
+                                .width(Length::Fill),
+                            ]
+                            .align_y(Alignment::Center)
+                            .spacing(10)
+                            .width(Length::Fill)
+                        ]
+                        .spacing(10),
+                        ContainerLayer::Layer2
+                    )
+                ]
+                .spacing(10),
+                ContainerLayer::Layer1
+            )
+            .width(Length::Fill),
+            content_container(
+                column![
+                    text("Telemetry"),
+                    self.plot.clone().into_widget().height(Length::Fixed(300.0))
+                ]
+                .spacing(10),
+                ContainerLayer::Layer1
+            )
+            .width(Length::Fill)
+            .height(Length::Fixed(320.0)),
+        ]
+        .spacing(10)
+        .into();
+        layout
+    }
+}

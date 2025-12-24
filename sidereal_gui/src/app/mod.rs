@@ -7,7 +7,7 @@ use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::tabs::setup::{self, BubbleMessagePayload};
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
-use crate::model::indi_server_handler::param_watcher;
+use crate::indi_handler::{device_discovery_watcher, param_watcher, server_disconnect_watcher};
 use crate::model::SiderealError;
 use crate::planetarium_handler::{planetarium_receiver, planetarium_sender};
 use crate::{
@@ -64,6 +64,7 @@ pub enum Message {
     Capture(tabs::capture::Message),
     Focus(tabs::focus::Message),
     Guide(tabs::guide::Message),
+    Telescope(tabs::telescope::Message),
     ConfigLoaded(Config),
     ErrorOccurred(SiderealError),
     ErrorCleared(),
@@ -80,6 +81,7 @@ pub struct ConnectedDevices {
     pub mount: Option<String>,
     pub camera: Option<String>,
     pub focuser: Option<String>,
+    pub telescope_controller: Option<String>,
 }
 
 #[derive(Default)]
@@ -111,7 +113,9 @@ impl MainWindow {
 
     fn subscription(&self) -> Subscription<Message> {
         Subscription::batch(vec![
-            Subscription::run_with_id("coords_subscription", param_watcher()),
+            Subscription::run_with_id("param_watcher", param_watcher()),
+            Subscription::run_with_id("device_discovery", device_discovery_watcher()),
+            Subscription::run_with_id("server_disconnect", server_disconnect_watcher()),
             self.camera_manager
                 .subscription()
                 .map(Message::ModifyCameras),
@@ -166,6 +170,9 @@ impl MainWindow {
             Message::Capture(msg) => {
                 self.state.capture.update(msg);
             }
+            Message::Telescope(msg) => {
+                return self.state.telescope.update(msg);
+            }
             Message::ConfigLoaded(config) => {
                 self.state.setup.on_config_load(config);
             }
@@ -196,6 +203,13 @@ impl MainWindow {
                 );
             }
             Message::ServerStatus(status) => {
+                // Clear connected devices when server connection is lost or disconnected
+                if matches!(
+                    status,
+                    ServerStatus::ConnectionLost | ServerStatus::Disconnected
+                ) {
+                    self.connected_devices = ConnectedDevices::default();
+                }
                 self.server_status = status;
             }
             Message::Noop => {}
@@ -248,6 +262,7 @@ impl MainWindow {
             Tab::Guide => self.state.guide.view().map(Message::Guide),
             Tab::Focus => self.state.focus.view().map(Message::Focus),
             Tab::Capture => self.state.capture.view().map(Message::Capture),
+            Tab::Telescope => self.state.telescope.view().map(Message::Telescope),
         };
 
         let content = tab_content(inner_content)
@@ -284,36 +299,58 @@ impl MainWindow {
                         )
                         .width(Length::Fill)
                         .on_press(Message::LaunchPlanetarium),
-                        text("Connected Devices"),
-                        match &self.connected_devices.mount {
-                            Some(mount) => column![content_container(
-                                row![text("Mount:"), Space::with_width(Length::Fill), text(mount)],
-                                ContainerLayer::Layer2
-                            )],
-                            None => Column::new(), // renders nothing
-                        },
-                        match &self.connected_devices.camera {
-                            Some(camera) => column![content_container(
-                                row![
-                                    text("Camera:"),
-                                    Space::with_width(Length::Fill),
-                                    text(camera)
-                                ],
-                                ContainerLayer::Layer2
-                            )],
-                            None => Column::new(), // renders nothing
-                        },
-                        match &self.connected_devices.focuser {
-                            Some(focuser) => column![content_container(
-                                row![
-                                    text("Focuser:"),
-                                    Space::with_width(Length::Fill),
-                                    text(focuser)
-                                ],
-                                ContainerLayer::Layer2
-                            )],
-                            None => Column::new(), // renders nothing
-                        },
+                        content_container(
+                            column![
+                                text("Connected Devices"),
+                                match &self.connected_devices.mount {
+                                    Some(mount) => column![content_container(
+                                        row![
+                                            text("Mount:"),
+                                            Space::with_width(Length::Fill),
+                                            text(mount)
+                                        ],
+                                        ContainerLayer::Layer3
+                                    )],
+                                    None => Column::new(), // renders nothing
+                                },
+                                match &self.connected_devices.camera {
+                                    Some(camera) => column![content_container(
+                                        row![
+                                            text("Camera:"),
+                                            Space::with_width(Length::Fill),
+                                            text(camera)
+                                        ],
+                                        ContainerLayer::Layer3
+                                    )],
+                                    None => Column::new(), // renders nothing
+                                },
+                                match &self.connected_devices.focuser {
+                                    Some(focuser) => column![content_container(
+                                        row![
+                                            text("Focuser:"),
+                                            Space::with_width(Length::Fill),
+                                            text(focuser)
+                                        ],
+                                        ContainerLayer::Layer3
+                                    )],
+                                    None => Column::new(), // renders nothing
+                                },
+                                match &self.connected_devices.telescope_controller {
+                                    Some(telescope_controller) => column![content_container(
+                                        row![
+                                            text("Telescope Controller:"),
+                                            Space::with_width(Length::Fill),
+                                            text(telescope_controller)
+                                        ],
+                                        ContainerLayer::Layer3
+                                    )],
+                                    None => Column::new(), // renders nothing
+                                },
+                            ]
+                            .spacing(5),
+                            ContainerLayer::Layer2
+                        )
+                        .width(Length::Fill),
                     ]
                     .spacing(10) // .padding(iced::Padding {
                                  //     top: 0.0,

@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-pub(crate) mod indi_server_handler;
-
 pub(crate) mod tracking_manager;
 
 pub type SiderealResult<T> = Result<T, SiderealError>;

@@ -1,6 +1,7 @@
 use crate::app::Message as MainMessage;
 use crate::gui::styles;
-use crate::model::{indi_server_handler, SiderealResult};
+use crate::indi_handler::mount;
+use crate::model::SiderealResult;
 use iced::widget::{button, image, mouse_area, Button};
 use iced::{Background, Border, Color, Element, Length, Task, Theme};
 #[derive(Debug, Clone)]
@@ -116,7 +117,7 @@ impl MountSteerButton {
         self.pressed = false;
         Task::perform(
             async {
-                indi_server_handler::stop_move().await;
+                mount::stop_move().await;
             },
             |_| MainMessage::Noop,
         )
@@ -135,76 +136,76 @@ impl MountSteerButton {
                     async move {
                         match dir {
                             ButtonDirection::N => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_NS".to_string(),
                                     "MOTION_NORTH".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::S => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_NS".to_string(),
                                     "MOTION_SOUTH".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::E => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_WE".to_string(),
                                     "MOTION_EAST".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::W => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_WE".to_string(),
                                     "MOTION_WEST".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::NE => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_NS".to_string(),
                                     "MOTION_NORTH".to_string(),
                                 )
                                 .await?;
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_WE".to_string(),
                                     "MOTION_EAST".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::SE => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_NS".to_string(),
                                     "MOTION_SOUTH".to_string(),
                                 )
                                 .await?;
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_WE".to_string(),
                                     "MOTION_EAST".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::NW => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_NS".to_string(),
                                     "MOTION_NORTH".to_string(),
                                 )
                                 .await?;
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_WE".to_string(),
                                     "MOTION_WEST".to_string(),
                                 )
                                 .await?;
                             }
                             ButtonDirection::SW => {
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_NS".to_string(),
                                     "MOTION_SOUTH".to_string(),
                                 )
                                 .await?;
-                                indi_server_handler::move_mount(
+                                mount::move_mount(
                                     "TELESCOPE_MOTION_WE".to_string(),
                                     "MOTION_WEST".to_string(),
                                 )

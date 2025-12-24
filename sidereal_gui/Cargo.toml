@@ -3,8 +3,10 @@ edition = "2021"
 name = "sidereal_gui"
 resolver = "2"
 version = "0.1.0"
+build = "build.rs"
 
 [dependencies]
+libc = "0.2"
 backtrace = "0.3" 
 base64 = "0.22" 
 bytemuck = "1.16" 

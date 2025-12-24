@@ -8,6 +8,7 @@ pub mod mount;
 pub mod observatory;
 pub mod plate_solve;
 pub mod setup;
+pub mod telescope;
 
 use crate::gui::styles::tab_style::tab_button;
 
@@ -18,6 +19,7 @@ use self::mount::MountState;
 use self::observatory::ObservatoryState;
 use self::plate_solve::PlateSolveState;
 use self::setup::SetupState;
+use self::telescope::TelescopeState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -28,6 +30,7 @@ pub enum Tab {
     Guide,
     Focus,
     Capture,
+    Telescope,
 }
 
 impl Default for Tab {
@@ -46,6 +49,7 @@ pub struct MainWindowState {
     pub guide: GuideState,
     pub focus: FocusState,
     pub capture: CaptureState,
+    pub telescope: TelescopeState,
 }
 
 pub fn header<F, M>(active: Tab, on_select: F) -> Element<'static, M>
@@ -70,7 +74,8 @@ where
         tab_button("Plate Solve", Tab::PlateSolve),
         tab_button("Focus", Tab::Focus),
         tab_button("Capture", Tab::Capture),
-        tab_button("Guide", Tab::Guide)
+        tab_button("Guide", Tab::Guide),
+        tab_button("Telescope", Tab::Telescope)
     ]
     .spacing(5)
     .width(Length::Fill),]

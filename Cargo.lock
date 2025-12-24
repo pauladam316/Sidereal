@@ -6722,6 +6722,7 @@ dependencies = [
  "iced_dialog",
  "image 0.25.6",
  "indi",
+ "libc",
  "once_cell",
  "protos",
  "qoi",
