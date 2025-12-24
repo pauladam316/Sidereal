@@ -30,6 +30,10 @@ pub const RED_TEXT: Color = Color::from_rgb(0.969, 0.431, 0.431);
 pub const AMBER_BUTTON_COLOR: Color = Color::from_rgb(0.42, 0.38, 0.30);
 pub const AMBER_BUTTON_BORDER: Color = Color::from_rgb(0.86, 0.80, 0.70);
 pub const AMBER_TEXT: Color = Color::from_rgb(0.969, 0.824, 0.431);
+// Indicator colors - halfway between button and text colors, brighter and more saturated
+pub const GREEN_INDICATOR_COLOR: Color = Color::from_rgb(0.35, 0.85, 0.35);
+pub const RED_INDICATOR_COLOR: Color = Color::from_rgb(0.85, 0.35, 0.35);
+pub const AMBER_INDICATOR_COLOR: Color = Color::from_rgb(0.85, 0.75, 0.25);
 pub static SIDEREAL_THEME: Lazy<Theme> = Lazy::new(|| {
     Theme::Custom(Arc::new(Custom::new(
         "Sidereal".to_owned(),

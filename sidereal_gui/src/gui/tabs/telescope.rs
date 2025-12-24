@@ -2,10 +2,11 @@ use crate::app::Message as MainMessage;
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::styles::text_input_style::sidereal_readonly_text;
-use crate::gui::widgets::live_plot::{create_live_plot, DataPoint, LivePlot};
+use crate::gui::widgets::indicator::{indicator, IndicatorColor};
+use crate::gui::widgets::live_plot::{create_live_plot, live_plot, DataPoint, LivePlotData};
 use crate::indi_handler::telescope_controller;
 use crate::model::SiderealResult;
-use iced::widget::{column, container, row, text};
+use iced::widget::{column, container, row, text, Space};
 use iced::{Alignment, Color, Element, Length, Task};
 use std::time::SystemTime;
 
@@ -41,7 +42,7 @@ pub enum Message {
 }
 
 pub struct TelescopeState {
-    plot: LivePlot,
+    plot: LivePlotData,
     // Series indices for the plot
     ambient_series: usize,
     heater1_series: usize,
@@ -67,13 +68,15 @@ pub struct TelescopeState {
 
 impl Default for TelescopeState {
     fn default() -> Self {
-        let mut plot = create_live_plot(500, 20.0); // 500 points max, 20px padding
+        // 30 minutes of data at ~1 update per second = ~1800 points, use 2000 to be safe
+        let mut plot = create_live_plot(2000, 20.0);
 
         // Add temperature series for telescope telemetry
+        // Primary heater (heater1), secondary heater (heater2), and ambient
         let ambient_series = plot.add_series("Ambient", Color::from_rgb(0.3, 0.7, 1.0));
-        let heater1_series = plot.add_series("Heater 1", Color::from_rgb(1.0, 0.3, 0.3));
-        let heater2_series = plot.add_series("Heater 2", Color::from_rgb(1.0, 0.6, 0.3));
-        let heater3_series = plot.add_series("Heater 3", Color::from_rgb(0.3, 1.0, 0.3));
+        let heater1_series = plot.add_series("Primary Heater", Color::from_rgb(1.0, 0.3, 0.3));
+        let heater2_series = plot.add_series("Secondary Heater", Color::from_rgb(1.0, 0.6, 0.3));
+        let heater3_series = plot.add_series("Heater 3", Color::from_rgb(0.3, 1.0, 0.3)); // Keep for compatibility but won't be displayed
 
         Self {
             plot,
@@ -136,7 +139,10 @@ impl TelescopeState {
                 self.heater3_manual_override = heater3_manual_override;
 
                 // Update plot with new temperature data
+                // Show last 30 minutes (1800 seconds) of data
                 let timestamp = self.start_time.elapsed().unwrap_or_default().as_secs_f64();
+
+                // Add data points for ambient, primary heater, and secondary heater
                 self.plot.add_data_point(
                     self.ambient_series,
                     DataPoint {
@@ -156,13 +162,6 @@ impl TelescopeState {
                     DataPoint {
                         timestamp,
                         value: heater2_temp,
-                    },
-                );
-                self.plot.add_data_point(
-                    self.heater3_series,
-                    DataPoint {
-                        timestamp,
-                        value: heater3_temp,
                     },
                 );
 
@@ -269,29 +268,31 @@ impl TelescopeState {
                     row![
                         sidereal_button(
                             container(text("Open"))
-                                .width(Length::Fill)
                                 .align_x(Alignment::Center)
                                 .align_y(Alignment::Center)
                         )
-                        .width(Length::Fill)
+                        .width(Length::Fixed(80.0))
                         .on_press(Message::LensCapOpen),
                         sidereal_button(
                             container(text("Close"))
-                                .width(Length::Fill)
                                 .align_x(Alignment::Center)
                                 .align_y(Alignment::Center)
                         )
-                        .width(Length::Fill)
+                        .width(Length::Fixed(80.0))
                         .on_press(Message::LensCapClose),
-                        text("State:"),
-                        sidereal_readonly_text(lens_cap_state_text).width(Length::Fill),
-                        text("Manual Override:"),
-                        sidereal_readonly_text(if self.lens_cap_manual_override {
-                            "Enabled"
+                        Space::with_width(Length::Fill),
+                        text("Open:"),
+                        indicator(if self.lens_cap_open {
+                            IndicatorColor::Green
                         } else {
-                            "Disabled"
-                        })
-                        .width(Length::Fill),
+                            IndicatorColor::Red
+                        }),
+                        text("Manual Override:"),
+                        indicator(if self.lens_cap_manual_override {
+                            IndicatorColor::Green
+                        } else {
+                            IndicatorColor::Red
+                        }),
                     ]
                     .align_y(Alignment::Center)
                     .spacing(10)
@@ -307,29 +308,31 @@ impl TelescopeState {
                     row![
                         sidereal_button(
                             container(text("On"))
-                                .width(Length::Fill)
                                 .align_x(Alignment::Center)
                                 .align_y(Alignment::Center)
                         )
-                        .width(Length::Fill)
+                        .width(Length::Fixed(80.0))
                         .on_press(Message::FlatLightOn),
                         sidereal_button(
                             container(text("Off"))
-                                .width(Length::Fill)
                                 .align_x(Alignment::Center)
                                 .align_y(Alignment::Center)
                         )
-                        .width(Length::Fill)
+                        .width(Length::Fixed(80.0))
                         .on_press(Message::FlatLightOff),
-                        text("State:"),
-                        sidereal_readonly_text(flat_light_state_text).width(Length::Fill),
-                        text("Manual Override:"),
-                        sidereal_readonly_text(if self.flat_light_manual_override {
-                            "Enabled"
+                        Space::with_width(Length::Fill),
+                        text("On:"),
+                        indicator(if self.flat_light_on {
+                            IndicatorColor::Green
                         } else {
-                            "Disabled"
-                        })
-                        .width(Length::Fill),
+                            IndicatorColor::Red
+                        }),
+                        text("Manual Override:"),
+                        indicator(if self.flat_light_manual_override {
+                            IndicatorColor::Green
+                        } else {
+                            IndicatorColor::Red
+                        }),
                     ]
                     .align_y(Alignment::Center)
                     .spacing(10)
@@ -348,31 +351,37 @@ impl TelescopeState {
                             row![
                                 sidereal_button(
                                     container(text("Enable"))
-                                        .width(Length::Fill)
                                         .align_x(Alignment::Center)
                                         .align_y(Alignment::Center)
                                 )
-                                .width(Length::Fill)
+                                .width(Length::Fixed(80.0))
                                 .on_press(Message::Heater1Enable),
                                 sidereal_button(
                                     container(text("Disable"))
-                                        .width(Length::Fill)
                                         .align_x(Alignment::Center)
                                         .align_y(Alignment::Center)
                                 )
-                                .width(Length::Fill)
+                                .width(Length::Fixed(80.0))
                                 .on_press(Message::Heater1Disable),
-                                text("Status:"),
-                                sidereal_readonly_text(heater1_status_text).width(Length::Fill),
-                                text("State:"),
-                                sidereal_readonly_text(heater1_state_text).width(Length::Fill),
-                                text("Manual Override:"),
-                                sidereal_readonly_text(if self.heater1_manual_override {
-                                    "Enabled"
+                                Space::with_width(Length::Fill),
+                                text("Enabled:"),
+                                indicator(if self.heater1_on {
+                                    IndicatorColor::Green
                                 } else {
-                                    "Disabled"
-                                })
-                                .width(Length::Fill),
+                                    IndicatorColor::Red
+                                }),
+                                text("Heating:"),
+                                indicator(if self.heater1_on {
+                                    IndicatorColor::Green
+                                } else {
+                                    IndicatorColor::Red
+                                }),
+                                text("Manual Override:"),
+                                indicator(if self.heater1_manual_override {
+                                    IndicatorColor::Green
+                                } else {
+                                    IndicatorColor::Red
+                                }),
                             ]
                             .align_y(Alignment::Center)
                             .spacing(10)
@@ -387,31 +396,37 @@ impl TelescopeState {
                             row![
                                 sidereal_button(
                                     container(text("Enable"))
-                                        .width(Length::Fill)
                                         .align_x(Alignment::Center)
                                         .align_y(Alignment::Center)
                                 )
-                                .width(Length::Fill)
+                                .width(Length::Fixed(80.0))
                                 .on_press(Message::Heater2Enable),
                                 sidereal_button(
                                     container(text("Disable"))
-                                        .width(Length::Fill)
                                         .align_x(Alignment::Center)
                                         .align_y(Alignment::Center)
                                 )
-                                .width(Length::Fill)
+                                .width(Length::Fixed(80.0))
                                 .on_press(Message::Heater2Disable),
-                                text("Status:"),
-                                sidereal_readonly_text(heater2_status_text).width(Length::Fill),
-                                text("State:"),
-                                sidereal_readonly_text(heater2_state_text).width(Length::Fill),
-                                text("Manual Override:"),
-                                sidereal_readonly_text(if self.heater2_manual_override {
-                                    "Enabled"
+                                Space::with_width(Length::Fill),
+                                text("Enabled:"),
+                                indicator(if self.heater2_on {
+                                    IndicatorColor::Green
                                 } else {
-                                    "Disabled"
-                                })
-                                .width(Length::Fill),
+                                    IndicatorColor::Red
+                                }),
+                                text("Heating:"),
+                                indicator(if self.heater2_on {
+                                    IndicatorColor::Green
+                                } else {
+                                    IndicatorColor::Red
+                                }),
+                                text("Manual Override:"),
+                                indicator(if self.heater2_manual_override {
+                                    IndicatorColor::Green
+                                } else {
+                                    IndicatorColor::Red
+                                }),
                             ]
                             .align_y(Alignment::Center)
                             .spacing(10)
@@ -426,31 +441,37 @@ impl TelescopeState {
                             row![
                                 sidereal_button(
                                     container(text("Enable"))
-                                        .width(Length::Fill)
                                         .align_x(Alignment::Center)
                                         .align_y(Alignment::Center)
                                 )
-                                .width(Length::Fill)
+                                .width(Length::Fixed(80.0))
                                 .on_press(Message::Heater3Enable),
                                 sidereal_button(
                                     container(text("Disable"))
-                                        .width(Length::Fill)
                                         .align_x(Alignment::Center)
                                         .align_y(Alignment::Center)
                                 )
-                                .width(Length::Fill)
+                                .width(Length::Fixed(80.0))
                                 .on_press(Message::Heater3Disable),
-                                text("Status:"),
-                                sidereal_readonly_text(heater3_status_text).width(Length::Fill),
-                                text("State:"),
-                                sidereal_readonly_text(heater3_state_text).width(Length::Fill),
-                                text("Manual Override:"),
-                                sidereal_readonly_text(if self.heater3_manual_override {
-                                    "Enabled"
+                                Space::with_width(Length::Fill),
+                                text("Enabled:"),
+                                indicator(if self.heater3_on {
+                                    IndicatorColor::Green
                                 } else {
-                                    "Disabled"
-                                })
-                                .width(Length::Fill),
+                                    IndicatorColor::Red
+                                }),
+                                text("Heating:"),
+                                indicator(if self.heater3_on {
+                                    IndicatorColor::Green
+                                } else {
+                                    IndicatorColor::Red
+                                }),
+                                text("Manual Override:"),
+                                indicator(if self.heater3_manual_override {
+                                    IndicatorColor::Green
+                                } else {
+                                    IndicatorColor::Red
+                                }),
                             ]
                             .align_y(Alignment::Center)
                             .spacing(10)
@@ -458,22 +479,15 @@ impl TelescopeState {
                         ]
                         .spacing(10),
                         ContainerLayer::Layer2
-                    )
+                    ),
+                    live_plot(&self.plot)
+                        .width(Length::Fill)
+                        .height(Length::Fixed(300.0))
                 ]
                 .spacing(10),
                 ContainerLayer::Layer1
             )
             .width(Length::Fill),
-            content_container(
-                column![
-                    text("Telemetry"),
-                    self.plot.clone().into_widget().height(Length::Fixed(300.0))
-                ]
-                .spacing(10),
-                ContainerLayer::Layer1
-            )
-            .width(Length::Fill)
-            .height(Length::Fixed(320.0)),
         ]
         .spacing(10)
         .into();
