@@ -1,6 +1,7 @@
 use crate::colors;
+use bevy::feathers::cursor::EntityCursor;
 use bevy::prelude::*;
-use bevy::window::{CursorIcon, SystemCursorIcon};
+use bevy::window::SystemCursorIcon;
 
 #[derive(Component)]
 pub struct MenuBar;
@@ -120,7 +121,7 @@ fn spawn_menu_group(
                     },
                     BackgroundColor(Color::NONE),
                     MenuLabel { menu_id },
-                    CursorIcon::System(SystemCursorIcon::Pointer),
+                    EntityCursor::System(SystemCursorIcon::Pointer),
                 ))
                 .with_children(|parent| {
                     parent.spawn((
@@ -177,7 +178,7 @@ fn spawn_menu_item(
             },
             BackgroundColor(Color::NONE),
             MenuItem { action },
-            CursorIcon::System(SystemCursorIcon::Pointer),
+            EntityCursor::System(SystemCursorIcon::Pointer),
         ))
         .with_children(|parent| {
             parent.spawn((
@@ -410,7 +411,7 @@ fn spawn_modal_window<T: Component>(
                                     },
                                     BackgroundColor(colors::CLOSE_BUTTON),
                                     CloseButton,
-                                    CursorIcon::System(SystemCursorIcon::Pointer),
+                                    EntityCursor::System(SystemCursorIcon::Pointer),
                                 ))
                                 .with_children(|parent| {
                                     parent.spawn((
