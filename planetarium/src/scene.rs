@@ -1,6 +1,8 @@
 use bevy::asset::RenderAssetUsages;
-use bevy::render::mesh::Mesh;
-use bevy::{prelude::*, render::mesh::PrimitiveTopology};
+use bevy::{
+    mesh::{Mesh, PrimitiveTopology},
+    prelude::*,
+};
 use meshtext::{MeshGenerator, MeshText, TextSection};
 
 pub struct ScenePlugin;

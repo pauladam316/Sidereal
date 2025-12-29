@@ -23,9 +23,9 @@ pub struct StarfieldState {
     /// When we first spawned (the RA/Dec→horizon positions were for this UTC)
     pub spawn_utc: DateTime<Utc>,
 
-    /// Our last “time override” instant, for smooth rotation updates
+    /// Our last "time override" instant, for smooth rotation updates
     pub base_instant: Instant,
-    /// How far (radians) we’ve already rotated at base_instant
+    /// How far (radians) we've already rotated at base_instant
     pub base_angle: f32,
 
     /// Observer latitude & longitude (degrees)
@@ -58,7 +58,7 @@ impl Plugin for StarfieldPlugin {
     fn build(&self, app: &mut App) {
         app
             // events
-            .add_event::<PlanetariumEvent>()
+            .add_message::<PlanetariumEvent>()
             // startup
             .add_systems(Startup, spawn_starfield)
             // runtime event handlers
@@ -97,7 +97,7 @@ fn star_direction(time: DateTime<Utc>, lat: f64, lon: f64, ra: f64, dec: f64) ->
     let north = dec.cos() * ha.cos() * lat.sin() - dec.sin() * lat.cos();
     let up = dec.cos() * ha.cos() * lat.cos() + dec.sin() * lat.sin();
 
-    // Bevy: X=east, Y=up, Z=–north  (so “forward” is towards the sky)
+    // Bevy: X=east, Y=up, Z=–north  (so "forward" is towards the sky)
     Vec3::new(east as f32, up as f32, -north as f32).normalize()
 }
 
@@ -113,7 +113,7 @@ pub fn magnitude_to_scale(mag: f32) -> f32 {
     OUT_MIN * (OUT_MAX / OUT_MIN).powf(t)
 }
 
-/// Where your executable’s `assets/BSC5` folder lives
+/// Where your executable's `assets/BSC5` folder lives
 fn asset_base() -> PathBuf {
     let exe = std::env::current_exe().expect("no exe path");
     exe.parent().unwrap().to_path_buf()
@@ -201,9 +201,9 @@ fn spawn_starfield(
     }
 }
 
-/// When you send a SetLocationEvent, recompute `axis` **and** every star’s base position
+/// When you send a SetLocationEvent, recompute `axis` **and** every star's base position
 pub fn handle_set_location_events(
-    mut ev: EventReader<PlanetariumEvent>,
+    mut ev: MessageReader<PlanetariumEvent>,
     mut state: ResMut<StarfieldState>,
     mut q: Query<(&StarData, &mut Transform), Without<Camera3d>>,
 ) {
@@ -216,7 +216,7 @@ pub fn handle_set_location_events(
             let lr = lat_deg.to_radians();
             state.axis = Vec3::new(0.0, lr.sin() as f32, lr.cos() as f32);
 
-            // recompute every star’s initial translation
+            // recompute every star's initial translation
             for (data, mut tf) in &mut q {
                 let dir = star_direction(
                     state.spawn_utc,
@@ -233,7 +233,7 @@ pub fn handle_set_location_events(
 
 /// When you send a SetTimeEvent, jump the rotation to that UTC
 fn handle_set_time_events(
-    mut ev: EventReader<PlanetariumEvent>,
+    mut ev: MessageReader<PlanetariumEvent>,
     mut state: ResMut<StarfieldState>,
 ) {
     for evt in ev.read() {
@@ -266,7 +266,7 @@ fn starfield_follow_camera(
     cam_q: Query<&GlobalTransform, With<Camera>>,
     mut star_q: Query<&mut Transform, With<StarfieldRoot>>,
 ) {
-    // Try to grab exactly one camera; if it’s not there yet, just return.
+    // Try to grab exactly one camera; if it's not there yet, just return.
     let cam_tf = match cam_q.single() {
         Ok(tf) => tf,
         Err(_) => return, // no camera spawned yet

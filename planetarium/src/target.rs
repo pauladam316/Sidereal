@@ -1,7 +1,6 @@
 use crate::events::PlanetariumEvent;
 use crate::starfield::StarfieldRoot;
 use bevy::prelude::*;
-use bevy::render::camera::Projection;
 
 #[derive(Component)]
 pub struct TargetLabel; // marker for the text child
@@ -16,7 +15,7 @@ impl Plugin for TargetPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, place_target_on_right_click);
         app.add_systems(PostUpdate, rescale_targets_system);
-        app.add_event::<PlanetariumEvent>();
+        app.add_message::<PlanetariumEvent>();
         app.add_systems(Update, handle_set_mount_position_events);
         app.add_systems(PostUpdate, orient_targets_to_camera);
     }
@@ -274,7 +273,7 @@ pub fn spawn_tracking_target(
 
 pub fn handle_set_mount_position_events(
     mut commands: Commands,
-    mut ev: EventReader<PlanetariumEvent>,
+    mut ev: MessageReader<PlanetariumEvent>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut mats: ResMut<Assets<StandardMaterial>>,
     assets: Res<AssetServer>,

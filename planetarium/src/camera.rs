@@ -157,7 +157,7 @@ pub fn camera_rotation_system(
     t.rotation = Quat::from_euler(EulerRot::YXZ, rc.yaw, rc.pitch, 0.0);
 }
 pub fn camera_zoom_system(
-    mut wheel: EventReader<MouseWheel>,
+    mut wheel: MessageReader<MouseWheel>,
     windows: Query<&Window, With<PrimaryWindow>>,
     mut q: Query<
         (

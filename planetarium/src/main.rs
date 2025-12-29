@@ -2,13 +2,16 @@
 // src/main.rs
 mod camera;
 mod client;
+mod colors;
 mod events;
+mod menu;
 mod scene;
 mod server;
 mod star_catalog;
 mod starfield;
 mod target;
 use crate::events::PlanetariumEvent;
+use crate::menu::MenuPlugin;
 use crate::target::TargetPlugin;
 
 use bevy::prelude::*;
@@ -61,17 +64,25 @@ fn main() {
             255.0,
         )))
         .insert_resource(EventChannelReceiver(Mutex::new(event_rx)))
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Planetarium".into(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins(bevy::feathers::cursor::CursorIconPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(StarfieldPlugin)
         .add_plugins(ScenePlugin)
+        .add_plugins(MenuPlugin)
         .add_systems(Update, event_listener_system)
         .add_plugins(TargetPlugin)
         .run();
 }
 fn event_listener_system(
     event_rx: Res<EventChannelReceiver>,
-    mut ev: EventWriter<PlanetariumEvent>,
+    mut ev: MessageWriter<PlanetariumEvent>,
 ) {
     // lock *briefly*
     if let Ok(receiver) = event_rx.0.lock() {
