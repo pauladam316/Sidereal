@@ -98,7 +98,6 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
                             .map_err(|_| gst::FlowError::Error)?;
 
                         if info.format() != gst_video::VideoFormat::Rgba {
-                            eprintln!("[appsink] unexpected format: {:?}", info.format());
                             return Err(gst::FlowError::Error);
                         }
 
@@ -108,8 +107,19 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
 
                         let w = info.width() as usize;
                         let h = info.height() as usize;
+                        
+                        // Validate dimensions to prevent crashes
+                        if w == 0 || h == 0 || w > 10000 || h > 10000 {
+                            return Err(gst::FlowError::Error);
+                        }
+                        
                         let stride = frame.plane_stride()[0] as usize;
                         let src = frame.plane_data(0).map_err(|_| gst::FlowError::Error)?;
+                        
+                        // Validate stride is reasonable
+                        if stride < w * 4 || stride > w * 4 + 1024 {
+                            // Continue anyway, but stride is unexpected
+                        }
 
                         // Optimized memory copy: use bulk copy when stride matches, otherwise use efficient row copy
                         let data = if stride == w * 4 {
@@ -118,12 +128,29 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
                         } else {
                             // Stride doesn't match - need to copy row by row
                             // Use unsafe for better performance than safe slice operations
-                            let mut data: Vec<u8> = Vec::with_capacity(w * h * 4);
+                            let expected_size = w * h * 4;
+                            let mut data: Vec<u8> = Vec::with_capacity(expected_size);
+                            
+                            // Validate source buffer size
+                            let src_size = src.len();
+                            let min_required = (h - 1) * stride + w * 4;
+                            if src_size < min_required {
+                                return Err(gst::FlowError::Error);
+                            }
+                            
                             unsafe {
-                                data.set_len(w * h * 4);
+                                data.set_len(expected_size);
                                 for y in 0..h {
-                                    let src_ptr = src.as_ptr().add(y * stride);
-                                    let dst_ptr = data.as_mut_ptr().add(y * w * 4);
+                                    let src_offset = y * stride;
+                                    let dst_offset = y * w * 4;
+                                    
+                                    // Bounds check before copy
+                                    if src_offset + w * 4 > src_size || dst_offset + w * 4 > expected_size {
+                                        return Err(gst::FlowError::Error);
+                                    }
+                                    
+                                    let src_ptr = src.as_ptr().add(src_offset);
+                                    let dst_ptr = data.as_mut_ptr().add(dst_offset);
                                     std::ptr::copy_nonoverlapping(src_ptr, dst_ptr, w * 4);
                                 }
                             }
@@ -134,10 +161,7 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
                         let _ = tx_frames.try_send((w as u32, h as u32, data));
                         Ok(gst::FlowSuccess::Ok)
                     })
-                    .unwrap_or_else(|_| {
-                        eprintln!("[appsink] new_sample panicked; converting to FlowError");
-                        Err(gst::FlowError::Error)
-                    });
+                    .unwrap_or_else(|_| Err(gst::FlowError::Error));
 
                 res
             })
@@ -158,7 +182,7 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
         let pipeline = pipeline;
         let bus = bus;
 
-        // Start
+        // Start pipeline - original behavior: just set state and let it handle async transitions
         let _ = pipeline.set_state(gst::State::Playing);
 
         // Block on bus messages; exit on EOS/ERROR or on stop request
@@ -172,9 +196,11 @@ fn start_gst_rtsp(url: &str) -> Result<(mpsc::Receiver<(u32, u32, Vec<u8>)>, Sto
                     MessageView::Eos(..) => {
                         break;
                     }
-                    MessageView::Error(err) => {
-                        eprintln!("GStreamer error: {}", err.error());
+                    MessageView::Error(_err) => {
                         break;
+                    }
+                    MessageView::Warning(_warn) => {
+                        // Ignore warnings
                     }
                     _ => {}
                 },

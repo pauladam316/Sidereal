@@ -8,7 +8,9 @@ use iced::{
 /// Indicator color state
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum IndicatorColor {
+    #[allow(dead_code)]
     Green,
+    #[allow(dead_code)]
     Yellow,
     Red,
 }
@@ -29,6 +31,7 @@ impl Indicator {
         }
     }
 
+    #[allow(dead_code)]
     pub fn size(mut self, size: f32) -> Self {
         self.size = size;
         self.cache.clear();

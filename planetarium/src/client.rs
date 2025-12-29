@@ -3,7 +3,7 @@
 use prost_types::Timestamp;
 use protos::protos::{sidereal_client::SiderealClient, GenericTrack, SetTrackingTargetRequest};
 
-pub async fn send_event(payload: String) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn send_event(_payload: String) -> Result<(), Box<dyn std::error::Error>> {
     let mut client = SiderealClient::connect("http://[::1]:50052").await?;
     println!("SENDING");
     // current UTC time

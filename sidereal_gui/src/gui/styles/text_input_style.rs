@@ -36,6 +36,7 @@ where
 
 /// A read-only text display that looks like a text input but cannot be edited
 /// and doesn't highlight on hover. The value can only be changed programmatically.
+#[allow(dead_code)]
 pub fn sidereal_readonly_text<'a, Message>(value: &'a str) -> Container<'a, Message>
 where
     Message: 'a + Clone,

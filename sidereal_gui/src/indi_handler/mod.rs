@@ -440,6 +440,7 @@ struct DeviceWatcherConfig {
     /// Function to set the device to None in CONNECTED_DEVICES
     clear_device: fn(&mut ServerInstance),
     /// Function to get/set the device name in ConnectedDevices message
+    #[allow(dead_code)]
     get_connected_name: fn(&ConnectedDevices) -> Option<String>,
     set_connected_name: fn(&mut ConnectedDevices, Option<String>),
     /// Function to spawn the watcher task

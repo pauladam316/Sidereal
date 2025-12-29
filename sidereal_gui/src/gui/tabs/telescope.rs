@@ -1,7 +1,6 @@
 use crate::app::Message as MainMessage;
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
-use crate::gui::styles::text_input_style::sidereal_readonly_text;
 use crate::gui::widgets::indicator::{indicator, IndicatorColor};
 use crate::gui::widgets::live_plot::{create_live_plot, live_plot, DataPoint, LivePlotData};
 use crate::indi_handler::telescope_controller;
@@ -47,6 +46,7 @@ pub struct TelescopeState {
     ambient_series: usize,
     heater1_series: usize,
     heater2_series: usize,
+    #[allow(dead_code)]
     heater3_series: usize,
     start_time: SystemTime,
     // Current telemetry values
@@ -240,22 +240,22 @@ impl TelescopeState {
         }
     }
     pub fn view(&self) -> Element<'static, Message> {
-        let lens_cap_state_text = if self.lens_cap_open { "Open" } else { "Closed" };
-        let flat_light_state_text = if self.flat_light_on { "On" } else { "Off" };
-        let heater1_state_text = if self.heater1_on { "On" } else { "Off" };
-        let heater2_state_text = if self.heater2_on { "On" } else { "Off" };
-        let heater3_state_text = if self.heater3_on { "On" } else { "Off" };
-        let heater1_status_text = if self.heater1_on {
+        let _lens_cap_state_text = if self.lens_cap_open { "Open" } else { "Closed" };
+        let _flat_light_state_text = if self.flat_light_on { "On" } else { "Off" };
+        let _heater1_state_text = if self.heater1_on { "On" } else { "Off" };
+        let _heater2_state_text = if self.heater2_on { "On" } else { "Off" };
+        let _heater3_state_text = if self.heater3_on { "On" } else { "Off" };
+        let _heater1_status_text = if self.heater1_on {
             "Enabled"
         } else {
             "Disabled"
         };
-        let heater2_status_text = if self.heater2_on {
+        let _heater2_status_text = if self.heater2_on {
             "Enabled"
         } else {
             "Disabled"
         };
-        let heater3_status_text = if self.heater3_on {
+        let _heater3_status_text = if self.heater3_on {
             "Enabled"
         } else {
             "Disabled"

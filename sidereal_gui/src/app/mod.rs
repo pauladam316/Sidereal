@@ -273,7 +273,7 @@ impl MainWindow {
                     }
                 }
             }
-            Message::ForwardedRPC(RPC) => {
+            Message::ForwardedRPC(_rpc) => {
                 println!("test message received");
             }
         }

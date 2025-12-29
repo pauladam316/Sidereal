@@ -282,9 +282,9 @@ where
 
                     // Get roof status - try to get it but don't fail if unavailable
                     // We'll use telemetry data for roof state instead of separate ROOF_STATUS parameter
-                    let roof_position = None::<Option<f64>>;
-                    let roof_is_open = None::<Option<bool>>;
-                    let roof_is_closed = None::<Option<bool>>;
+                    let _roof_position = None::<Option<f64>>;
+                    let _roof_is_open = None::<Option<bool>>;
+                    let _roof_is_closed = None::<Option<bool>>;
 
                     // Use roof_state from telemetry to determine open/closed
                     let roof_state_val = map.get("ROOF_STATE").map(|n| {

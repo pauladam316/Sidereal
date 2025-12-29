@@ -18,10 +18,10 @@ fn main() -> iced::Result {
     {
         use std::path::PathBuf;
         let plugin_paths = vec![
-            "/opt/homebrew/lib/gstreamer-1.0",  // Apple Silicon Homebrew
-            "/usr/local/lib/gstreamer-1.0",     // Intel Homebrew
+            "/opt/homebrew/lib/gstreamer-1.0", // Apple Silicon Homebrew
+            "/usr/local/lib/gstreamer-1.0",    // Intel Homebrew
         ];
-        
+
         for path in plugin_paths {
             if PathBuf::from(path).exists() {
                 if let Ok(current) = std::env::var("GST_PLUGIN_PATH") {
@@ -34,10 +34,27 @@ fn main() -> iced::Result {
         }
     }
 
+    // On Windows, set GStreamer environment variables for proper initialization
+    #[cfg(target_os = "windows")]
+    {
+        // Ensure GStreamer registry is updated
+        if std::env::var("GST_REGISTRY_FORK").is_err() {
+            std::env::set_var("GST_REGISTRY_FORK", "no");
+        }
+    }
+
     gst::init().unwrap_or_else(|e| {
         eprintln!("Failed to initialize GStreamer: {}", e);
-        eprintln!("On macOS, make sure GStreamer is installed via Homebrew:");
-        eprintln!("  brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav");
+        #[cfg(target_os = "macos")]
+        {
+            eprintln!("On macOS, make sure GStreamer is installed via Homebrew:");
+            eprintln!("  brew install gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-plugins-ugly gst-libav");
+        }
+        #[cfg(target_os = "windows")]
+        {
+            eprintln!("On Windows, make sure GStreamer is installed and in PATH:");
+            eprintln!("  Download from: https://gstreamer.freedesktop.org/download/#windows");
+        }
         std::process::exit(1);
     });
 

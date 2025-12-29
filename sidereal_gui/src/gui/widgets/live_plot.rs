@@ -1,8 +1,7 @@
-use crate::gui::styles;
 use iced::{
     alignment, mouse,
     widget::canvas::{self, Cache, Geometry, Path, Program, Stroke, Text},
-    Color, Length, Point, Rectangle, Renderer, Size, Theme,
+    Color, Point, Rectangle, Renderer, Size, Theme,
 };
 use std::collections::VecDeque;
 
@@ -61,6 +60,7 @@ impl LivePlotData {
         id
     }
 
+    #[allow(dead_code)]
     pub fn series_mut(&mut self, index: usize) -> Option<&mut PlotSeries> {
         self.series.get_mut(index)
     }
@@ -349,5 +349,6 @@ pub fn create_live_plot(max_points: usize, padding: f32) -> LivePlotData {
     LivePlotData::new(max_points, padding)
 }
 
-// Re-export for compatibility
+// Re-export for compatibility (may be used by external code)
+#[allow(unused_imports)]
 pub use LivePlotData as LivePlot;

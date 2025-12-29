@@ -1,14 +1,10 @@
 // src/server.rs
 
 use protos::protos::sidereal_server::{Sidereal, SiderealServer};
-use std::sync::mpsc::Sender;
 use tokio::sync::mpsc;
 use tonic::{transport::Server, Request, Response, Status};
 
-use protos::protos::planetarium_server::{Planetarium, PlanetariumServer};
-use protos::protos::{SetLocationRequest, SetLocationResponse};
-use protos::protos::{SetMountLocationRequest, SetTrackingTargetResponse};
-use protos::protos::{SetMountLocationResponse, SetTrackingTargetRequest};
+use protos::protos::{SetTrackingTargetResponse, SetTrackingTargetRequest};
 
 use crate::model::{SiderealError, SiderealResult};
 

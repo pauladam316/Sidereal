@@ -1,7 +1,6 @@
 use crate::app::Message as MainMessage;
 use crate::gui::styles::button_style::sidereal_button;
 use crate::gui::styles::container_style::{content_container, ContainerLayer};
-use crate::gui::styles::text_input_style::sidereal_readonly_text;
 use crate::gui::widgets::indicator::{indicator, IndicatorColor};
 use crate::indi_handler::roof_controller;
 use crate::model::SiderealResult;
