@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::config::{CameraConfig, CameraConfigType};
 use crate::gui::{
     styles::{
         button_style::sidereal_button,
@@ -89,7 +90,45 @@ impl fmt::Display for CameraType {
     }
 }
 
+impl From<CameraConfig> for Camera {
+    fn from(config: CameraConfig) -> Self {
+        match config.camera_type {
+            CameraConfigType::RTSP => Camera {
+                camera_type: CameraType::RTSP(IpCamera::new(config.url, None)),
+            },
+            CameraConfigType::AllSky => Camera {
+                camera_type: CameraType::AllSky(AllSkyCameraSettings {
+                    url: config.url,
+                }),
+            },
+        }
+    }
+}
+
+impl From<&Camera> for CameraConfig {
+    fn from(camera: &Camera) -> Self {
+        match &camera.camera_type {
+            CameraType::RTSP(ip_camera) => CameraConfig {
+                camera_type: CameraConfigType::RTSP,
+                url: ip_camera.url.clone(),
+            },
+            CameraType::AllSky(all_sky_settings) => CameraConfig {
+                camera_type: CameraConfigType::AllSky,
+                url: all_sky_settings.url.clone(),
+            },
+        }
+    }
+}
+
 impl CameraManager {
+    pub fn load_from_config(&mut self, config_cameras: Vec<CameraConfig>) {
+        self.cameras = config_cameras.into_iter().map(Camera::from).collect();
+    }
+
+    pub fn to_config_cameras(&self) -> Vec<CameraConfig> {
+        self.cameras.iter().map(CameraConfig::from).collect()
+    }
+
     pub fn subscription(&self) -> Subscription<CameraMessage> {
         let subs = self
             .cameras

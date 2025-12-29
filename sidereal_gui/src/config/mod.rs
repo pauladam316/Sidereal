@@ -33,7 +33,17 @@ pub struct Location {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CameraConfig {}
+#[allow(clippy::upper_case_acronyms)]
+pub enum CameraConfigType {
+    RTSP,
+    AllSky,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CameraConfig {
+    pub camera_type: CameraConfigType,
+    pub url: String,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
@@ -128,6 +138,13 @@ impl Config {
         {
             let mut guard = GLOBAL_CONFIG.write().await;
             guard.selected_server = selected_server;
+        }
+        Config::persist().await
+    }
+    pub async fn update_cameras(cameras: Vec<CameraConfig>) -> SiderealResult<()> {
+        {
+            let mut guard = GLOBAL_CONFIG.write().await;
+            guard.cameras = cameras;
         }
         Config::persist().await
     }

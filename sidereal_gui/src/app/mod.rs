@@ -8,7 +8,7 @@ use crate::gui::styles::container_style::{content_container, ContainerLayer};
 use crate::gui::tabs::setup::{self, BubbleMessagePayload};
 use crate::gui::widgets::server_status::{server_status_widget, ServerStatus};
 use crate::indi_handler::{device_discovery_watcher, param_watcher, server_disconnect_watcher};
-use crate::model::SiderealError;
+use crate::model::{SiderealError, SiderealResult};
 use crate::planetarium_handler::{planetarium_receiver, planetarium_sender};
 use crate::{
     config::Config,
@@ -175,7 +175,13 @@ impl MainWindow {
                 return self.state.telescope.update(msg);
             }
             Message::ConfigLoaded(config) => {
-                self.state.setup.on_config_load(config);
+                self.state.setup.on_config_load(config.clone());
+                self.camera_manager.load_from_config(config.cameras);
+                // Automatically connect all cameras that were loaded from config
+                for camera_index in 0..self.camera_manager.cameras.len() {
+                    self.camera_manager
+                        .handle_message(CameraMessage::ConnectCamera(camera_index));
+                }
             }
             Message::ErrorOccurred(err) => {
                 self.dialog = Some(DialogType::Error(err.to_string()));
@@ -219,7 +225,33 @@ impl MainWindow {
             }
             Message::IndiError(err) => self.dialog = Some(DialogType::Error(err.to_string())),
             Message::ModifyCameras(camera_message) => {
+                // Only save cameras when configuration changes, not on streaming/connection updates
+                let should_save = matches!(
+                    camera_message,
+                    CameraMessage::AddCamera
+                        | CameraMessage::RemoveCamera(_)
+                        | CameraMessage::SetCameraType { .. }
+                        | CameraMessage::SetCameraField { .. }
+                );
+
                 self.camera_manager.handle_message(camera_message);
+
+                if should_save {
+                    // Save cameras to config after configuration modification
+                    let cameras_config = self.camera_manager.to_config_cameras();
+                    return Task::perform(
+                        async move {
+                            crate::config::Config::update_cameras(cameras_config).await?;
+                            Ok(())
+                        },
+                        |result: SiderealResult<()>| match result {
+                            Ok(()) => Message::Noop,
+                            Err(e) => {
+                                Message::ErrorOccurred(SiderealError::ConfigError(e.to_string()))
+                            }
+                        },
+                    );
+                }
             }
             Message::AddServer(child) => {
                 if let Some(DialogType::AddServer(ref mut dialog)) = self.dialog {
