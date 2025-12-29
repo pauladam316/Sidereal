@@ -210,9 +210,12 @@ impl SetupState {
                     row![
                         text("Server"),
                         pick,
-                        sidereal_button(text("Add"))
-                            .on_press(Message::Bubble(BubbleMessagePayload::AddServer)),
-                        sidereal_button(text("Connect")).on_press(Message::ConnectToServer)
+                        sidereal_button(
+                            text("Add"),
+                            Some(Message::Bubble(BubbleMessagePayload::AddServer)),
+                            true,
+                        ),
+                        sidereal_button(text("Connect"), Some(Message::ConnectToServer), true)
                     ]
                     .align_y(Alignment::Center)
                     .spacing(10),
@@ -247,7 +250,7 @@ impl SetupState {
                                     value: v,
                                 }
                             }),
-                            sidereal_button("Apply").on_press(Message::SetLocation)
+                            sidereal_button("Apply", Some(Message::SetLocation), true)
                         ]
                         .align_y(Alignment::Center)
                         .spacing(10),
@@ -262,9 +265,14 @@ impl SetupState {
                         camera_manager
                             .view_camera_setup()
                             .map(|m| Message::Bubble(BubbleMessagePayload::Camera(m))),
-                        sidereal_button("Add Camera").width(Length::Fill).on_press(
-                            Message::Bubble(BubbleMessagePayload::Camera(CameraMessage::AddCamera))
+                        sidereal_button(
+                            "Add Camera",
+                            Some(Message::Bubble(BubbleMessagePayload::Camera(
+                                CameraMessage::AddCamera,
+                            ))),
+                            true,
                         )
+                        .width(Length::Fill)
                     ]
                     .spacing(10),
                     ContainerLayer::Layer1

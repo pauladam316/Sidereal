@@ -64,17 +64,25 @@ impl AddServerDialog {
                 ]
                 .spacing(10),
                 row![
-                    sidereal_button("Add").on_press({
-                        let map = map.clone();
-                        map(Message::Submit {
-                            ip: self.ip.clone(),
-                            port: self.port.clone(),
-                        })
-                    }),
-                    sidereal_button("Cancel").on_press({
-                        let map = map.clone();
-                        map(Message::Cancel)
-                    }),
+                    sidereal_button(
+                        "Add",
+                        Some({
+                            let map = map.clone();
+                            map(Message::Submit {
+                                ip: self.ip.clone(),
+                                port: self.port.clone(),
+                            })
+                        }),
+                        true,
+                    ),
+                    sidereal_button(
+                        "Cancel",
+                        Some({
+                            let map = map.clone();
+                            map(Message::Cancel)
+                        }),
+                        true,
+                    ),
                 ]
                 .spacing(10)
                 .align_y(Alignment::Center),

@@ -23,6 +23,7 @@ use tokio::{
 pub mod camera;
 pub mod focuser;
 pub mod mount;
+pub mod roof_controller;
 pub mod telescope_controller;
 
 // INDI interface bitmasks (common values)
@@ -47,6 +48,7 @@ pub struct ServerInstance {
     pub camera: Option<ActiveDevice>,
     pub focuser: Option<ActiveDevice>,
     pub telescope_controller: Option<ActiveDevice>,
+    pub roof_controller: Option<ActiveDevice>,
 }
 
 impl Default for ServerInstance {
@@ -56,6 +58,7 @@ impl Default for ServerInstance {
             camera: None,
             focuser: None,
             telescope_controller: None,
+            roof_controller: None,
         }
     }
 }
@@ -112,7 +115,7 @@ where
     };
 
     // ---- 1) Scan under locks: collect *names* only ----
-    let (mount_name, camera_name, focuser_name, telescope_controller_name) = {
+    let (mount_name, camera_name, focuser_name, telescope_controller_name, roof_controller_name) = {
         let devices = client_instance.client.get_devices();
         let map = devices.lock().await;
 
@@ -120,6 +123,7 @@ where
         let mut camera_name: Option<String> = None;
         let mut focuser_name: Option<String> = None;
         let mut telescope_controller_name: Option<String> = None;
+        let mut roof_controller_name: Option<String> = None;
 
         for (name, dev_mx) in map.iter() {
             let dev = dev_mx.lock().await;
@@ -141,6 +145,8 @@ where
             // Check for Telescope Controller by device name (it's an AUX device)
             if telescope_controller_name.is_none() && name == "Telescope Controller" {
                 telescope_controller_name = Some(name.clone());
+            } else if roof_controller_name.is_none() && name == "Roof Controller" {
+                roof_controller_name = Some(name.clone());
             } else if mount_name.is_none() && (iface_mask & IF_TELESCOPE) != 0 {
                 mount_name = Some(name.clone());
             } else if camera_name.is_none() && (iface_mask & IF_CCD) != 0 {
@@ -155,6 +161,7 @@ where
             camera_name,
             focuser_name,
             telescope_controller_name,
+            roof_controller_name,
         )
         // all guards dropped here
     };
@@ -166,6 +173,7 @@ where
     let mut final_camera_name: Option<String> = None;
     let mut final_focuser_name: Option<String> = None;
     let mut final_telescope_controller_name: Option<String> = None;
+    let mut final_roof_controller_name: Option<String> = None;
 
     // Helper to connect to device and verify it's reachable
     // Reduced timeouts for faster discovery
@@ -203,7 +211,7 @@ where
     }
 
     // Check all devices in parallel for faster discovery
-    let (mount_result, camera_result, focuser_result, telescope_controller_result) = tokio::join!(
+    let (mount_result, camera_result, focuser_result, telescope_controller_result, roof_controller_result) = tokio::join!(
         async {
             if let Some(n) = mount_name.clone() {
                 match time::timeout(
@@ -287,6 +295,27 @@ where
             } else {
                 None
             }
+        },
+        async {
+            if let Some(n) = roof_controller_name.clone() {
+                match time::timeout(
+                    Duration::from_millis(300),
+                    client_instance.client.get_device::<()>(&n),
+                )
+                .await
+                {
+                    Ok(Ok(dev)) => {
+                        if connect_and_verify_device(&dev).await {
+                            Some((dev, n))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
         }
     );
 
@@ -307,6 +336,10 @@ where
         result.telescope_controller = Some(dev);
         final_telescope_controller_name = Some(name);
     }
+    if let Some((dev, name)) = roof_controller_result {
+        result.roof_controller = Some(dev);
+        final_roof_controller_name = Some(name);
+    }
 
     // ---- 3) Always update the cache and send device change message ----
     // Only send device names for devices that we successfully resolved and verified
@@ -324,6 +357,7 @@ where
             camera: final_camera_name,
             focuser: final_focuser_name,
             telescope_controller: final_telescope_controller_name,
+            roof_controller: final_roof_controller_name,
         }))
         .await;
 
@@ -464,6 +498,25 @@ pub fn param_watcher() -> impl Stream<Item = Message> {
                     })
                 },
             },
+            DeviceWatcherConfig {
+                device_id: "roof_controller",
+                get_device: |devices| devices.roof_controller.clone(),
+                clear_device: |devices| devices.roof_controller = None,
+                get_connected_name: |cd| cd.roof_controller.clone(),
+                set_connected_name: |cd, name| cd.roof_controller = name,
+                spawn_watcher: |device, tx| {
+                    tokio::spawn(async move {
+                        if device
+                            .change("CONNECTION", vec![("CONNECT", true)])
+                            .await
+                            .is_ok()
+                        {
+                            let mut channel_sink = ChannelSink { tx };
+                            roof_controller::watch_telemetry(device, &mut channel_sink).await;
+                        }
+                    })
+                },
+            },
         ];
 
         // Track active watcher tasks by device ID
@@ -540,6 +593,7 @@ pub fn param_watcher() -> impl Stream<Item = Message> {
                                 camera: None,
                                 focuser: None,
                                 telescope_controller: None,
+                                roof_controller: None,
                             };
                             (config.set_connected_name)(&mut connected_devices, None);
                             let _ = output.send(Message::ConnectedDeviceChange(connected_devices)).await;

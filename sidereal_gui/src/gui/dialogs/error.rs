@@ -15,7 +15,7 @@ where
         column![
             text("Error").size(28),
             text(error_string),
-            row![sidereal_button("Dismiss").on_press(on_clear)]
+            row![sidereal_button("Dismiss", Some(on_clear), true)]
                 .spacing(10)
                 .align_y(Alignment::Center),
         ]

@@ -274,13 +274,17 @@ impl MountState {
                             container(text("Park Scope"))
                                 .width(Length::Fill)
                                 .align_x(Alignment::Center)
-                                .align_y(Alignment::Center)
+                                .align_y(Alignment::Center),
+                            None,
+                            true,
                         ),
                         sidereal_button(
                             container(text("Unpark Scope"))
                                 .width(Length::Fill)
                                 .align_x(Alignment::Center)
-                                .align_y(Alignment::Center)
+                                .align_y(Alignment::Center),
+                            None,
+                            true,
                         )
                     ]
                     .spacing(10)

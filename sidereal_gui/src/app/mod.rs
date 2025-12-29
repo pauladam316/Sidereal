@@ -82,6 +82,7 @@ pub struct ConnectedDevices {
     pub camera: Option<String>,
     pub focuser: Option<String>,
     pub telescope_controller: Option<String>,
+    pub roof_controller: Option<String>,
 }
 
 #[derive(Default)]
@@ -156,7 +157,7 @@ impl MainWindow {
                 return self.state.mount.update(msg);
             }
             Message::Observatory(msg) => {
-                self.state.observatory.update(msg);
+                return self.state.observatory.update(msg);
             }
             Message::PlateSolve(msg) => {
                 self.state.plate_solve.update(msg);
@@ -295,10 +296,11 @@ impl MainWindow {
                         sidereal_button(
                             container(text("Launch Planetarium"))
                                 .width(Length::Fill)
-                                .align_x(Alignment::Center)
+                                .align_x(Alignment::Center),
+                            Some(Message::LaunchPlanetarium),
+                            true,
                         )
-                        .width(Length::Fill)
-                        .on_press(Message::LaunchPlanetarium),
+                        .width(Length::Fill),
                         content_container(
                             column![
                                 text("Connected Devices"),
@@ -341,6 +343,17 @@ impl MainWindow {
                                             text("Telescope Controller:"),
                                             Space::with_width(Length::Fill),
                                             text(telescope_controller)
+                                        ],
+                                        ContainerLayer::Layer3
+                                    )],
+                                    None => Column::new(), // renders nothing
+                                },
+                                match &self.connected_devices.roof_controller {
+                                    Some(roof_controller) => column![content_container(
+                                        row![
+                                            text("Roof Controller:"),
+                                            Space::with_width(Length::Fill),
+                                            text(roof_controller)
                                         ],
                                         ContainerLayer::Layer3
                                     )],

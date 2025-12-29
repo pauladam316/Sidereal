@@ -269,17 +269,19 @@ impl TelescopeState {
                         sidereal_button(
                             container(text("Open"))
                                 .align_x(Alignment::Center)
-                                .align_y(Alignment::Center)
+                                .align_y(Alignment::Center),
+                            Some(Message::LensCapOpen),
+                            true,
                         )
-                        .width(Length::Fixed(80.0))
-                        .on_press(Message::LensCapOpen),
+                        .width(Length::Fixed(80.0)),
                         sidereal_button(
                             container(text("Close"))
                                 .align_x(Alignment::Center)
-                                .align_y(Alignment::Center)
+                                .align_y(Alignment::Center),
+                            Some(Message::LensCapClose),
+                            true,
                         )
-                        .width(Length::Fixed(80.0))
-                        .on_press(Message::LensCapClose),
+                        .width(Length::Fixed(80.0)),
                         Space::with_width(Length::Fill),
                         text("Open:"),
                         indicator(if self.lens_cap_open {
@@ -309,17 +311,19 @@ impl TelescopeState {
                         sidereal_button(
                             container(text("On"))
                                 .align_x(Alignment::Center)
-                                .align_y(Alignment::Center)
+                                .align_y(Alignment::Center),
+                            Some(Message::FlatLightOn),
+                            true,
                         )
-                        .width(Length::Fixed(80.0))
-                        .on_press(Message::FlatLightOn),
+                        .width(Length::Fixed(80.0)),
                         sidereal_button(
                             container(text("Off"))
                                 .align_x(Alignment::Center)
-                                .align_y(Alignment::Center)
+                                .align_y(Alignment::Center),
+                            Some(Message::FlatLightOff),
+                            true,
                         )
-                        .width(Length::Fixed(80.0))
-                        .on_press(Message::FlatLightOff),
+                        .width(Length::Fixed(80.0)),
                         Space::with_width(Length::Fill),
                         text("On:"),
                         indicator(if self.flat_light_on {
@@ -352,17 +356,19 @@ impl TelescopeState {
                                 sidereal_button(
                                     container(text("Enable"))
                                         .align_x(Alignment::Center)
-                                        .align_y(Alignment::Center)
+                                        .align_y(Alignment::Center),
+                                    Some(Message::Heater1Enable),
+                                    true,
                                 )
-                                .width(Length::Fixed(80.0))
-                                .on_press(Message::Heater1Enable),
+                                .width(Length::Fixed(80.0)),
                                 sidereal_button(
                                     container(text("Disable"))
                                         .align_x(Alignment::Center)
-                                        .align_y(Alignment::Center)
+                                        .align_y(Alignment::Center),
+                                    Some(Message::Heater1Disable),
+                                    true,
                                 )
-                                .width(Length::Fixed(80.0))
-                                .on_press(Message::Heater1Disable),
+                                .width(Length::Fixed(80.0)),
                                 Space::with_width(Length::Fill),
                                 text("Enabled:"),
                                 indicator(if self.heater1_on {
@@ -397,17 +403,19 @@ impl TelescopeState {
                                 sidereal_button(
                                     container(text("Enable"))
                                         .align_x(Alignment::Center)
-                                        .align_y(Alignment::Center)
+                                        .align_y(Alignment::Center),
+                                    Some(Message::Heater2Enable),
+                                    true,
                                 )
-                                .width(Length::Fixed(80.0))
-                                .on_press(Message::Heater2Enable),
+                                .width(Length::Fixed(80.0)),
                                 sidereal_button(
                                     container(text("Disable"))
                                         .align_x(Alignment::Center)
-                                        .align_y(Alignment::Center)
+                                        .align_y(Alignment::Center),
+                                    Some(Message::Heater2Disable),
+                                    true,
                                 )
-                                .width(Length::Fixed(80.0))
-                                .on_press(Message::Heater2Disable),
+                                .width(Length::Fixed(80.0)),
                                 Space::with_width(Length::Fill),
                                 text("Enabled:"),
                                 indicator(if self.heater2_on {
@@ -442,17 +450,19 @@ impl TelescopeState {
                                 sidereal_button(
                                     container(text("Enable"))
                                         .align_x(Alignment::Center)
-                                        .align_y(Alignment::Center)
+                                        .align_y(Alignment::Center),
+                                    Some(Message::Heater3Enable),
+                                    true,
                                 )
-                                .width(Length::Fixed(80.0))
-                                .on_press(Message::Heater3Enable),
+                                .width(Length::Fixed(80.0)),
                                 sidereal_button(
                                     container(text("Disable"))
                                         .align_x(Alignment::Center)
-                                        .align_y(Alignment::Center)
+                                        .align_y(Alignment::Center),
+                                    Some(Message::Heater3Disable),
+                                    true,
                                 )
-                                .width(Length::Fixed(80.0))
-                                .on_press(Message::Heater3Disable),
+                                .width(Length::Fixed(80.0)),
                                 Space::with_width(Length::Fill),
                                 text("Enabled:"),
                                 indicator(if self.heater3_on {

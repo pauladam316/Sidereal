@@ -213,9 +213,16 @@ impl CameraManager {
                                         }
                                     }
                                 ),
-                                sidereal_button("Connect")
-                                    .on_press(CameraMessage::ConnectCamera(i)),
-                                sidereal_button("Remove").on_press(CameraMessage::RemoveCamera(i))
+                                sidereal_button(
+                                    "Connect",
+                                    Some(CameraMessage::ConnectCamera(i)),
+                                    true,
+                                ),
+                                sidereal_button(
+                                    "Remove",
+                                    Some(CameraMessage::RemoveCamera(i)),
+                                    true,
+                                )
                             ]
                             .spacing(10)
                             .align_y(Alignment::Center)
@@ -231,8 +238,12 @@ impl CameraManager {
                                     }
                                 }
                             ),
-                            sidereal_button("Connect"),
-                            sidereal_button("Remove").on_press(CameraMessage::RemoveCamera(i))
+                            sidereal_button("Connect", None, true),
+                            sidereal_button(
+                                "Remove",
+                                Some(CameraMessage::RemoveCamera(i)),
+                                true,
+                            )
                         ]
                         .spacing(10)
                         .align_y(Alignment::Center),
