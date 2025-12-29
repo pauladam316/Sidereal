@@ -20,13 +20,13 @@ use crate::{
 use iced::futures::SinkExt;
 use iced::widget::container;
 use iced::widget::{column, row, scrollable, Column, Space};
+use iced::window::{self, icon};
 use iced::Alignment::{self};
-use iced::{stream, Subscription};
+use iced::{stream, Settings, Subscription};
 use iced::{widget::text, Element, Length, Task};
 use once_cell::sync::OnceCell;
 use planetarium_receiver::ForwardedRPC;
 use tokio::sync::{mpsc, Mutex};
-
 static RPC_RX: OnceCell<Arc<Mutex<Option<mpsc::UnboundedReceiver<ForwardedRPC>>>>> =
     OnceCell::new();
 
@@ -125,15 +125,26 @@ impl MainWindow {
         ])
     }
 
-    pub fn run(settings: iced::Settings) -> iced::Result {
-        let result = iced::application("Sidereal GUI", Self::update, Self::view)
+    pub fn run(settings: Settings) -> iced::Result {
+        // Build window settings (size + optional icon)
+        let mut win = window::Settings {
+            size: iced::Size::new(1200.0, 900.0),
+            ..Default::default()
+        };
+
+        // Prefer PNG if you can. ICO may work depending on enabled decoders.
+        if let Ok(bytes) = std::fs::read("assets/icon.ico") {
+            if let Ok(ic) = icon::from_file_data(&bytes, None) {
+                win.icon = Some(ic);
+            }
+        }
+
+        iced::application("Sidereal GUI", Self::update, Self::view)
             .subscription(|app: &MainWindow| app.subscription())
             .theme(|_| SIDEREAL_THEME.clone())
             .settings(settings)
-            .window_size(iced::Size::new(1200.0, 900.0))
-            .run_with(Self::new);
-
-        result
+            .window(win)
+            .run_with(Self::new)
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {

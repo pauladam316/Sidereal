@@ -8,7 +8,10 @@ use crate::gui::{
         picklist_style::sidereal_picklist,
         text_input_style::sidereal_text_input,
     },
-    widgets::video::{IpCamera, IpCameraMessage},
+    widgets::{
+        allsky::{AllSkyCamera, AllSkyCameraMessage},
+        video::{IpCamera, IpCameraMessage},
+    },
 };
 use iced::{
     widget::{column, row, text},
@@ -24,6 +27,7 @@ pub enum CameraField {
 #[derive(Debug, Clone)]
 pub enum CameraMessageType {
     IpCamera(IpCameraMessage),
+    AllSky(AllSkyCameraMessage),
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +60,7 @@ pub struct RTSPCameraSettings {
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct AllSkyCameraSettings {
     pub url: String,
+    pub camera: AllSkyCamera,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum CameraType {
@@ -98,7 +103,8 @@ impl From<CameraConfig> for Camera {
             },
             CameraConfigType::AllSky => Camera {
                 camera_type: CameraType::AllSky(AllSkyCameraSettings {
-                    url: config.url,
+                    url: config.url.clone(),
+                    camera: AllSkyCamera::new(config.url),
                 }),
             },
         }
@@ -136,7 +142,7 @@ impl CameraManager {
             .enumerate()
             .map(|(i, cam)| match &cam.camera_type {
                 CameraType::RTSP(camera) => camera.subscription_with_index(i),
-                _ => Subscription::none(),
+                CameraType::AllSky(camera) => camera.camera.subscription_with_index(i),
             });
         Subscription::batch(subs)
     }
@@ -159,9 +165,12 @@ impl CameraManager {
                         CameraType::RTSP(camera) => match field {
                             CameraField::Url => camera.url = value,
                         },
-                        CameraType::AllSky(_all_sky_camera_settings) => {
-                            // TODO
-                        }
+                        CameraType::AllSky(all_sky_settings) => match field {
+                            CameraField::Url => {
+                                all_sky_settings.url = value.clone();
+                                all_sky_settings.camera.url = value;
+                            }
+                        },
                     }
                 }
             }
@@ -183,6 +192,17 @@ impl CameraManager {
                         None => panic!("no camera with that index, something went very wrong!"),
                     }
                 }
+                CameraMessageType::AllSky(allsky_message) => {
+                    match self.cameras.get_mut(camera_index) {
+                        Some(cam) => match cam.camera_type {
+                            CameraType::AllSky(ref mut settings) => {
+                                settings.camera.update(allsky_message);
+                            }
+                            _ => panic!("sending an AllSky camera message to a non AllSky camera, something went very wrong!"),
+                        },
+                        None => panic!("no camera with that index, something went very wrong!"),
+                    }
+                }
             },
             CameraMessage::ConnectCamera(camera_index) => {
                 if let Some(cam) = self.cameras.get_mut(camera_index) {
@@ -190,8 +210,8 @@ impl CameraManager {
                         CameraType::RTSP(camera) => {
                             camera.connect();
                         }
-                        CameraType::AllSky(_all_sky_camera_settings) => {
-                            // TODO
+                        CameraType::AllSky(all_sky_settings) => {
+                            all_sky_settings.camera.connect();
                         }
                     }
                 }
@@ -202,14 +222,25 @@ impl CameraManager {
     pub fn view_cameras(&self) -> Element<CameraMessage> {
         let mut col = column![].spacing(10);
         for (i, camera) in self.cameras.iter().enumerate() {
-            if let CameraType::RTSP(camera) = &camera.camera_type {
-                col = col.push(camera.view().map({
-                    let i = i;
-                    move |ip_msg: IpCameraMessage| CameraMessage::UpdateCamera {
-                        camera_index: i,
-                        message: CameraMessageType::IpCamera(ip_msg),
-                    }
-                }));
+            match &camera.camera_type {
+                CameraType::RTSP(camera) => {
+                    col = col.push(camera.view().map({
+                        let i = i;
+                        move |ip_msg: IpCameraMessage| CameraMessage::UpdateCamera {
+                            camera_index: i,
+                            message: CameraMessageType::IpCamera(ip_msg),
+                        }
+                    }));
+                }
+                CameraType::AllSky(camera) => {
+                    col = col.push(camera.camera.view().map({
+                        let i = i;
+                        move |allsky_msg: AllSkyCameraMessage| CameraMessage::UpdateCamera {
+                            camera_index: i,
+                            message: CameraMessageType::AllSky(allsky_msg),
+                        }
+                    }));
+                }
             }
         }
         col.into()
@@ -266,26 +297,31 @@ impl CameraManager {
                             .spacing(10)
                             .align_y(Alignment::Center)
                         }
-                        CameraType::AllSky(all_sky_camera_settings) => row![
-                            text("URL: "),
-                            sidereal_text_input("url", &all_sky_camera_settings.url).on_input(
-                                move |v| {
-                                    CameraMessage::SetCameraField {
-                                        camera_index: i,
-                                        field: CameraField::Url,
-                                        value: v,
+                        CameraType::AllSky(all_sky_camera_settings) =>
+                            row![
+                                text("URL: "),
+                                sidereal_text_input("url", &all_sky_camera_settings.url).on_input(
+                                    move |v| {
+                                        CameraMessage::SetCameraField {
+                                            camera_index: i,
+                                            field: CameraField::Url,
+                                            value: v,
+                                        }
                                     }
-                                }
-                            ),
-                            sidereal_button("Connect", None, true),
-                            sidereal_button(
-                                "Remove",
-                                Some(CameraMessage::RemoveCamera(i)),
-                                true,
-                            )
-                        ]
-                        .spacing(10)
-                        .align_y(Alignment::Center),
+                                ),
+                                sidereal_button(
+                                    "Connect",
+                                    Some(CameraMessage::ConnectCamera(i)),
+                                    true,
+                                ),
+                                sidereal_button(
+                                    "Remove",
+                                    Some(CameraMessage::RemoveCamera(i)),
+                                    true,
+                                )
+                            ]
+                            .spacing(10)
+                            .align_y(Alignment::Center),
                     }
                 ]
                 .spacing(10),

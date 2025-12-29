@@ -1,7 +1,10 @@
+mod satellite_window;
+
 use crate::colors;
 use bevy::feathers::cursor::EntityCursor;
 use bevy::prelude::*;
 use bevy::window::SystemCursorIcon;
+pub use satellite_window::SatelliteWindow;
 
 #[derive(Component)]
 pub struct MenuBar;
@@ -10,9 +13,6 @@ pub struct MenuBar;
 pub struct MenuItem {
     pub action: MenuAction,
 }
-
-#[derive(Component)]
-pub struct SatelliteWindow;
 
 #[derive(Component)]
 pub struct CloseButton;
@@ -315,13 +315,7 @@ fn handle_menu_clicks(
                     if satellite_window_query.is_empty() {
                         menu_state.satellite_window_open = true;
                         let font = asset_server.load("segoeui.ttf");
-                        spawn_modal_window(
-                            &mut commands,
-                            "Satellite Tracking",
-                            SatelliteWindow,
-                            spawn_satellite_content,
-                            font,
-                        );
+                        satellite_window::spawn_satellite_window(&mut commands, font);
                     }
                 }
                 MenuAction::TrackDSO => {
@@ -333,118 +327,6 @@ fn handle_menu_clicks(
             }
         }
     }
-}
-
-fn spawn_modal_window<T: Component>(
-    commands: &mut Commands,
-    title: &str,
-    marker: T,
-    content_fn: fn(&mut ChildSpawnerCommands),
-    font: Handle<Font>,
-) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            BackgroundColor(colors::MODAL_OVERLAY),
-            ZIndex(2000),
-            marker,
-        ))
-        .with_children(|parent| {
-            parent
-                .spawn((
-                    Node {
-                        width: Val::Px(550.0),
-                        min_height: Val::Px(350.0),
-                        max_height: Val::Percent(80.0),
-                        flex_direction: FlexDirection::Column,
-                        border: UiRect::all(Val::Px(1.0)),
-                        ..default()
-                    },
-                    BackgroundColor(colors::MODAL_BACKGROUND),
-                    BorderColor::all(colors::MODAL_BORDER),
-                ))
-                .with_children(|parent| {
-                    // Title bar
-                    parent
-                        .spawn((
-                            Node {
-                                width: Val::Percent(100.0),
-                                height: Val::Px(36.0),
-                                flex_direction: FlexDirection::Row,
-                                justify_content: JustifyContent::SpaceBetween,
-                                align_items: AlignItems::Center,
-                                padding: UiRect::horizontal(Val::Px(14.0)),
-                                border: UiRect::bottom(Val::Px(1.0)),
-                                ..default()
-                            },
-                            BackgroundColor(colors::MODAL_TITLE_BAR),
-                            BorderColor::all(colors::MODAL_TITLE_BORDER),
-                        ))
-                        .with_children(|parent| {
-                            parent.spawn((
-                                Text::new(title),
-                                TextFont {
-                                    font: font.clone(),
-                                    font_size: 14.0,
-                                    ..default()
-                                },
-                                TextColor(colors::TEXT_COLOR_BRIGHT),
-                            ));
-
-                            // Close button
-                            parent
-                                .spawn((
-                                    Button,
-                                    Node {
-                                        width: Val::Px(24.0),
-                                        height: Val::Px(24.0),
-                                        justify_content: JustifyContent::Center,
-                                        align_items: AlignItems::Center,
-                                        ..default()
-                                    },
-                                    BackgroundColor(colors::CLOSE_BUTTON),
-                                    CloseButton,
-                                    EntityCursor::System(SystemCursorIcon::Pointer),
-                                ))
-                                .with_children(|parent| {
-                                    parent.spawn((
-                                        Text::new("×"),
-                                        TextFont {
-                                            font: font.clone(),
-                                            font_size: 16.0,
-                                            ..default()
-                                        },
-                                        TextColor(Color::WHITE),
-                                    ));
-                                });
-                        });
-
-                    // Content area
-                    parent
-                        .spawn((
-                            Node {
-                                width: Val::Percent(100.0),
-                                flex_grow: 1.0,
-                                padding: UiRect::all(Val::Px(16.0)),
-                                flex_direction: FlexDirection::Column,
-                                ..default()
-                            },
-                            BackgroundColor(colors::MENU_BAR_BACKGROUND),
-                        ))
-                        .with_children(content_fn);
-                });
-        });
-}
-
-fn spawn_satellite_content(_parent: &mut ChildSpawnerCommands) {
-    // Blank window - content to be added later
 }
 
 fn handle_window_close(
@@ -463,3 +345,4 @@ fn handle_window_close(
         }
     }
 }
+
