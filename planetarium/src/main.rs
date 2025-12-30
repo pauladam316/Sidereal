@@ -15,6 +15,7 @@ use crate::menu::MenuPlugin;
 use crate::target::TargetPlugin;
 
 use bevy::prelude::*;
+use bevy_egui::EguiPlugin;
 use camera::CameraPlugin;
 use scene::ScenePlugin;
 use starfield::StarfieldPlugin;
@@ -71,7 +72,7 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(bevy::feathers::cursor::CursorIconPlugin)
+        .add_plugins(EguiPlugin::default())
         .add_plugins(CameraPlugin)
         .add_plugins(StarfieldPlugin)
         .add_plugins(ScenePlugin)

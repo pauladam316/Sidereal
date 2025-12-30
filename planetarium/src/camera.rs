@@ -1,6 +1,7 @@
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use bevy_egui::EguiContext;
 
 #[derive(Component)]
 pub struct RotatingCamera {
@@ -34,6 +35,7 @@ pub fn setup_camera(mut commands: Commands) {
         },
         PanAnchor::default(),
         Msaa::Sample4,
+        EguiContext::default(), // Attach egui context to camera
     ));
 }
 fn signed_angle_around_axis(u: Vec3, v: Vec3, axis: Vec3) -> f32 {
