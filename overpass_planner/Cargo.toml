@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+name = "overpass_planner"
+resolver = "2"
+version = "0.1.0"
+
+[dependencies]
+chrono = "0.4"
+dirs = "5.0"
+thiserror = "2.0"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "fs"] }
+sgp4 = "0.4"
+satkit = "0.5"
+

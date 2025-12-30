@@ -1,3 +1,3 @@
 [workspace]
-members = ["sidereal_gui", "planetarium", "protos"]
+members = ["sidereal_gui", "planetarium", "protos", "overpass_planner"]
 resolver = "2"
