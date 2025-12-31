@@ -56,7 +56,7 @@ pub fn render_satellite_window(
     mut search_state: ResMut<SatelliteSearchState>,
     starfield_state: Res<StarfieldState>,
     search_channel: Res<SearchResultChannel>,
-    mut menu_state: ResMut<crate::menu::MenuState>,
+    mut menu_state: ResMut<crate::ui::MenuState>,
     mut camera_query: Query<&mut bevy_egui::EguiContext, With<bevy::prelude::Camera3d>>,
 ) {
     let Ok(mut egui_context) = camera_query.single_mut() else {

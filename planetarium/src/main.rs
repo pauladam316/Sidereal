@@ -4,15 +4,15 @@ mod camera;
 mod client;
 mod colors;
 mod events;
-mod menu;
 mod scene;
 mod server;
 mod star_catalog;
 mod starfield;
 mod target;
+mod ui;
 use crate::events::PlanetariumEvent;
-use crate::menu::MenuPlugin;
 use crate::target::TargetPlugin;
+use crate::ui::MenuPlugin;
 
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
