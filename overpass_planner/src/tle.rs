@@ -213,6 +213,33 @@ fn parse_tle_from_cache(cache_data: &str, norad_id: u32) -> OverpassPlannerResul
     )))
 }
 
+/// Gets the satellite name for a given NORAD ID.
+///
+/// This function fetches the TLE and extracts the name from the first line.
+///
+/// # Arguments
+/// * `norad_id` - The NORAD catalog number (NORAD ID) of the satellite
+///
+/// # Returns
+/// The satellite name as a string, or an error if the satellite is not found.
+pub async fn get_satellite_name(norad_id: u32) -> OverpassPlannerResult<String> {
+    let tle = fetch_tle(norad_id).await?;
+
+    // Extract name from first line of TLE
+    let lines: Vec<&str> = tle.lines().map(|l| l.trim()).collect();
+
+    // Find the name line (first non-empty line that doesn't start with "1 " or "2 ")
+    for line in &lines {
+        if !line.is_empty() && !line.starts_with("1 ") && !line.starts_with("2 ") {
+            return Ok(line.to_string());
+        }
+    }
+
+    Err(OverpassPlannerError::ParseError(
+        "Satellite name not found in TLE".to_string(),
+    ))
+}
+
 /// Fetches the TLE for a satellite from CelesTrak API with caching.
 ///
 /// This function checks the cache first. If the cache is valid (less than 2 hours old),

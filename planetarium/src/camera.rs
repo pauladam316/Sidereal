@@ -70,15 +70,22 @@ pub fn camera_rotation_system(
             &Camera,
             &GlobalTransform,
             &mut PanAnchor,
+            &mut EguiContext,
         ),
         With<Camera3d>,
     >,
 ) {
-    let (mut rc, mut t, projection, camera, gtf, mut anchor) = if let Ok(v) = q.single_mut() {
-        v
-    } else {
+    let (mut rc, mut t, projection, camera, gtf, mut anchor, mut egui_ctx) =
+        if let Ok(v) = q.single_mut() {
+            v
+        } else {
+            return;
+        };
+
+    // Disable camera controls if egui is using the pointer (e.g., window is focused)
+    if egui_ctx.get_mut().wants_pointer_input() {
         return;
-    };
+    }
     let window = if let Ok(w) = windows.single() {
         w
     } else {
@@ -168,15 +175,22 @@ pub fn camera_zoom_system(
             &mut Transform,
             &Camera,
             &GlobalTransform,
+            &mut EguiContext,
         ),
         With<Camera3d>,
     >,
 ) {
-    let (mut projection, mut rc, mut t, camera, gtf) = if let Ok(v) = q.single_mut() {
+    let (mut projection, mut rc, mut t, camera, gtf, mut egui_ctx) = if let Ok(v) = q.single_mut() {
         v
     } else {
         return;
     };
+
+    // Disable camera controls if egui is using the pointer (e.g., window is focused)
+    if egui_ctx.get_mut().wants_pointer_input() {
+        return;
+    }
+
     let window = if let Ok(w) = windows.single() {
         w
     } else {

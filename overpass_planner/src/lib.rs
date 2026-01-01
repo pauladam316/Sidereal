@@ -9,8 +9,12 @@ pub mod planning;
 pub mod tle;
 
 pub use planning::ObserverLocation;
-use planning::{calculate_alt_az, find_max_elevation, find_rise_time, find_set_time};
+use planning::{
+    calculate_alt_az, find_max_elevation, find_rise_time, find_set_time, is_night_at_location,
+    is_satellite_lit,
+};
 use tle::fetch_tle;
+pub use tle::get_satellite_name;
 
 /// Result type alias for overpass planner operations.
 pub type OverpassPlannerResult<T> = Result<T, OverpassPlannerError>;
@@ -41,6 +45,10 @@ pub struct Overpass {
     pub max_elevation: f64,
     /// Midpoint time of the overpass
     pub midpoint_time: DateTime<Utc>,
+    /// Whether the overpass occurs during nighttime (sun below -6° horizon)
+    pub is_night: bool,
+    /// Whether the satellite is illuminated by the sun during the overpass
+    pub is_lit: bool,
 }
 
 /// Represents a satellite position at a specific time.
@@ -130,11 +138,24 @@ pub async fn get_overpasses(
 
                 let midpoint_time = start + (set_time - start) / 2;
 
+                // Calculate if overpass occurs at night and if satellite is lit
+                // Check multiple points: start, midpoint, and end to catch transitions
+                let is_night_start = is_night_at_location(location, start)?;
+                let is_night_mid = is_night_at_location(location, midpoint_time)?;
+                let is_night_end = is_night_at_location(location, set_time)?;
+                // Consider it night if any part of the overpass is at night
+                let is_night = is_night_start || is_night_mid || is_night_end;
+
+                // For satellite illumination, check at midpoint (most representative)
+                let is_lit = is_satellite_lit(&tle, midpoint_time)?;
+
                 overpasses.push(Overpass {
                     start_time: start,
                     end_time: set_time,
                     max_elevation,
                     midpoint_time,
+                    is_night,
+                    is_lit,
                 });
             }
         }
@@ -168,11 +189,24 @@ pub async fn get_overpasses(
 
         let midpoint_time = start + (set_time.min(end_time) - start) / 2;
 
+        // Calculate if overpass occurs at night and if satellite is lit
+        // Check multiple points: start, midpoint, and end to catch transitions
+        let is_night_start = is_night_at_location(location, start)?;
+        let is_night_mid = is_night_at_location(location, midpoint_time)?;
+        let is_night_end = is_night_at_location(location, set_time.min(end_time))?;
+        // Consider it night if any part of the overpass is at night
+        let is_night = is_night_start || is_night_mid || is_night_end;
+
+        // For satellite illumination, check at midpoint (most representative)
+        let is_lit = is_satellite_lit(&tle, midpoint_time)?;
+
         overpasses.push(Overpass {
             start_time: start,
             end_time: set_time.min(end_time),
             max_elevation,
             midpoint_time,
+            is_night,
+            is_lit,
         });
     }
 

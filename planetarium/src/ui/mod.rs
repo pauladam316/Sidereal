@@ -1,9 +1,10 @@
 mod satellite_window;
 mod widgets;
 
+use crate::ui::widgets::planetarium_buttons::planetarium_menu_button_inner;
 use bevy::prelude::*;
 use bevy_egui::{egui, EguiContext};
-use widgets::{planetarium_button, planetarium_menu_button};
+use widgets::planetarium_menu_button;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MenuAction {
@@ -93,6 +94,12 @@ fn configure_segoe_ui_font(ctx: &egui::Context) {
         egui::FontId::new(15.0, FontFamily::Monospace),
     );
     ctx.set_style(style);
+
+    // Enable anti-aliasing/feathering for smoother text rendering
+    ctx.tessellation_options_mut(|tess_options| {
+        tess_options.feathering = true;
+        tess_options.feathering_size_in_pixels = 1.0; // Smooth edges with 1px feathering
+    });
 }
 
 fn render_menu_bar(
@@ -122,21 +129,24 @@ fn render_ui(ctx: &mut egui::Context, menu_state: &mut ResMut<MenuState>) {
                 planetarium_menu_button(ui, menu_id, hover_id, "Track", |ui, menu_id| {
                     // Satellite button
                     let satellite_hover_id = egui::Id::new("satellite_button_hover");
-                    if planetarium_button(ui, satellite_hover_id, "Satellite", false).clicked() {
+                    if planetarium_menu_button_inner(ui, satellite_hover_id, "Satellite", false)
+                        .clicked()
+                    {
                         menu_state.satellite_window_open = true;
                         egui::Popup::close_id(ui.ctx(), menu_id);
                     }
 
                     // DSO button
                     let dso_hover_id = egui::Id::new("dso_button_hover");
-                    if planetarium_button(ui, dso_hover_id, "DSO", false).clicked() {
+                    if planetarium_menu_button_inner(ui, dso_hover_id, "DSO", false).clicked() {
                         // TODO: Implement DSO tracking
                         egui::Popup::close_id(ui.ctx(), menu_id);
                     }
 
                     // Planet button
                     let planet_hover_id = egui::Id::new("planet_button_hover");
-                    if planetarium_button(ui, planet_hover_id, "Planet", false).clicked() {
+                    if planetarium_menu_button_inner(ui, planet_hover_id, "Planet", false).clicked()
+                    {
                         // TODO: Implement planet tracking
                         egui::Popup::close_id(ui.ctx(), menu_id);
                     }

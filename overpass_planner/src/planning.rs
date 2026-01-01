@@ -333,3 +333,178 @@ pub(crate) fn find_max_elevation(
     let (alt_mid, _) = calculate_alt_az(tle, location, midpoint)?;
     Ok(alt_mid.max(max_elevation))
 }
+
+/// Calculate sun elevation at observer location.
+/// Returns sun elevation in degrees (negative when below horizon).
+fn calculate_sun_elevation(location: ObserverLocation, timestamp: DateTime<Utc>) -> f64 {
+    // Calculate Julian Date
+    let unix = timestamp.timestamp() as f64;
+    let sub = timestamp.timestamp_subsec_nanos() as f64 * 1e-9;
+    let jd = 2440587.5 + (unix + sub) / 86400.0;
+
+    // Days since J2000.0
+    let n = jd - 2451545.0;
+
+    // Mean longitude of the sun (degrees)
+    // Normalize to 0-360 range
+    let l = (280.460 + 0.9856474 * n).rem_euclid(360.0);
+
+    // Mean anomaly (degrees)
+    // Normalize to 0-360 range
+    let g = (357.528 + 0.9856003 * n).rem_euclid(360.0);
+    let g_rad = g.to_radians();
+
+    // Ecliptic longitude (degrees)
+    let lambda = l + 1.915 * g_rad.sin() + 0.020 * (2.0 * g_rad).sin();
+    // Normalize to 0-360 range
+    let lambda = lambda.rem_euclid(360.0);
+    let lambda_rad = lambda.to_radians();
+
+    // Obliquity of the ecliptic (degrees)
+    let epsilon = 23.439 - 0.0000004 * n;
+    let epsilon_rad = epsilon.to_radians();
+
+    // Right ascension and declination (convert from ecliptic to equatorial)
+    // RA = atan2(sin(lambda) * cos(epsilon), cos(lambda))
+    // Dec = asin(sin(lambda) * sin(epsilon))
+    let alpha = (lambda_rad.sin() * epsilon_rad.cos()).atan2(lambda_rad.cos());
+    let delta = (lambda_rad.sin() * epsilon_rad.sin()).asin();
+
+    // Local sidereal time
+    let gmst =
+        (280.46061837 + 360.98564736629 * (jd - 2451545.0) + 0.000387933 * (n / 36525.0).powi(2)
+            - (n / 36525.0).powi(3) / 38710000.0)
+            % 360.0;
+    let lst = (gmst + location.longitude).to_radians();
+
+    // Hour angle
+    let ha = lst - alpha;
+
+    // Convert to altitude and azimuth
+    let lat_rad = location.latitude.to_radians();
+    let sin_alt = delta.sin() * lat_rad.sin() + delta.cos() * lat_rad.cos() * ha.cos();
+    sin_alt.asin().to_degrees()
+}
+
+/// Check if it's night at the observer location (sun below -6° horizon for astronomical twilight).
+pub(crate) fn is_night_at_location(
+    location: ObserverLocation,
+    timestamp: DateTime<Utc>,
+) -> OverpassPlannerResult<bool> {
+    let sun_elevation = calculate_sun_elevation(location, timestamp);
+    Ok(sun_elevation < -6.0)
+}
+
+/// Check if satellite is illuminated by the sun (not in Earth's shadow).
+pub(crate) fn is_satellite_lit(tle: &str, timestamp: DateTime<Utc>) -> OverpassPlannerResult<bool> {
+    // Parse TLE
+    let lines: Vec<&str> = tle
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    if lines.len() < 3 {
+        return Err(OverpassPlannerError::ParseError(
+            "TLE must contain at least 3 lines".to_string(),
+        ));
+    }
+
+    let mut line1 = None;
+    let mut line2 = None;
+    for line in &lines {
+        if line.starts_with("1 ") {
+            line1 = Some(*line);
+        } else if line.starts_with("2 ") {
+            line2 = Some(*line);
+        }
+    }
+
+    let line1 = line1
+        .ok_or_else(|| OverpassPlannerError::ParseError("TLE line 1 not found".to_string()))?;
+    let line2 = line2
+        .ok_or_else(|| OverpassPlannerError::ParseError("TLE line 2 not found".to_string()))?;
+
+    // Parse TLE using sgp4
+    let elements = Elements::from_tle(None, line1.as_bytes(), line2.as_bytes())
+        .map_err(|e| OverpassPlannerError::TLEError(format!("Failed to parse TLE: {e}")))?;
+
+    let constants = sgp4::Constants::from_elements(&elements).map_err(|e| {
+        OverpassPlannerError::CalculationError(format!("Failed to create constants: {e}"))
+    })?;
+
+    // Calculate minutes since TLE epoch
+    let tle_epoch = elements.datetime.and_utc();
+    let duration = timestamp.signed_duration_since(tle_epoch);
+    let minutes_since_epoch = duration.num_seconds() as f64 / 60.0;
+
+    // Propagate satellite position
+    let prediction = constants
+        .propagate(minutes_since_epoch)
+        .map_err(|e| OverpassPlannerError::CalculationError(format!("Propagation failed: {e}")))?;
+
+    // Satellite position in km (TEME frame)
+    let sat_pos = prediction.position;
+
+    // Earth radius in km
+    const EARTH_RADIUS_KM: f64 = 6378.137;
+
+    // Distance from Earth center to satellite
+    let sat_dist = (sat_pos[0].powi(2) + sat_pos[1].powi(2) + sat_pos[2].powi(2)).sqrt();
+
+    // Calculate sun position (simplified - using approximate position)
+    let unix = timestamp.timestamp() as f64;
+    let sub = timestamp.timestamp_subsec_nanos() as f64 * 1e-9;
+    let jd = 2440587.5 + (unix + sub) / 86400.0;
+    let n = jd - 2451545.0;
+
+    // Mean anomaly
+    let g = (357.528 + 0.9856003 * n).rem_euclid(360.0);
+    let g_rad = g.to_radians();
+
+    // Distance to sun (AU to km)
+    const AU_TO_KM: f64 = 149597870.7;
+    let sun_dist_km = AU_TO_KM * (1.00014 - 0.01671 * g_rad.cos() - 0.00014 * (2.0 * g_rad).cos());
+
+    // Ecliptic longitude
+    let lambda = (280.460 + 0.9856474 * n).rem_euclid(360.0)
+        + 1.915 * g_rad.sin()
+        + 0.020 * (2.0 * g_rad).sin();
+    let lambda = lambda.rem_euclid(360.0);
+    let lambda_rad = lambda.to_radians();
+
+    // Obliquity
+    let epsilon = 23.439 - 0.0000004 * n;
+    let epsilon_rad = epsilon.to_radians();
+
+    // Sun position in ECI (approximate, in km)
+    let sun_x = sun_dist_km * lambda_rad.cos();
+    let sun_y = sun_dist_km * lambda_rad.sin() * epsilon_rad.cos();
+    let sun_z = sun_dist_km * lambda_rad.sin() * epsilon_rad.sin();
+
+    // Vector from satellite to sun
+    let to_sun_x = sun_x - sat_pos[0];
+    let to_sun_y = sun_y - sat_pos[1];
+    let to_sun_z = sun_z - sat_pos[2];
+    let to_sun_dist = (to_sun_x.powi(2) + to_sun_y.powi(2) + to_sun_z.powi(2)).sqrt();
+
+    // Angle between satellite-Earth vector and satellite-Sun vector
+    // If angle < 90° and satellite is close enough, it might be in shadow
+    let dot_product = sat_pos[0] * to_sun_x + sat_pos[1] * to_sun_y + sat_pos[2] * to_sun_z;
+    let angle = (dot_product / (sat_dist * to_sun_dist)).acos();
+
+    // Check if satellite is in Earth's umbra (full shadow)
+    // Simplified: if angle < angle where Earth blocks sun, satellite is in shadow
+    // Shadow angle = arcsin(EARTH_RADIUS / sat_dist)
+    if sat_dist > EARTH_RADIUS_KM {
+        let shadow_angle = (EARTH_RADIUS_KM / sat_dist).asin();
+        // If the angle between sat-Earth and sat-Sun is less than shadow angle,
+        // and satellite is on the night side (dot product negative), it's in shadow
+        if angle < shadow_angle && dot_product < 0.0 {
+            return Ok(false);
+        }
+    }
+
+    // Otherwise, satellite is lit
+    Ok(true)
+}

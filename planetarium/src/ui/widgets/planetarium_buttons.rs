@@ -3,7 +3,8 @@ use bevy_egui::egui;
 
 /// Creates a styled button with hover effects using the accent yellow color.
 /// Returns the button response for further interaction.
-pub fn planetarium_button(
+/// Internal function used by planetarium_menu_button.
+pub fn planetarium_menu_button_inner(
     ui: &mut egui::Ui,
     hover_id: egui::Id,
     text: impl Into<egui::WidgetText>,
@@ -60,7 +61,7 @@ pub fn planetarium_menu_button(
     let ctx = ui.ctx();
     let is_popup_open = egui::Popup::is_id_open(ctx, menu_id);
 
-    let response = planetarium_button(ui, hover_id, text, is_popup_open);
+    let response = planetarium_menu_button_inner(ui, hover_id, text, is_popup_open);
 
     // This is the "real" popup framework (keeps itself alive, closes on click-outside, etc.)
     egui::Popup::menu(&response)

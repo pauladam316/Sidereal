@@ -19,6 +19,7 @@ pub const TEXT_COLOR_SECONDARY: Color = Color::srgb(0.78, 0.78, 0.82);
 pub const TEXT_COLOR_HIGHLIGHT: Color =
     Color::srgb(ACCENT_YELLOW_R, ACCENT_YELLOW_G, ACCENT_YELLOW_B); // Accent yellow
 pub const TEXT_COLOR_BRIGHT: Color = Color::srgb(0.88, 0.88, 0.90);
+pub const WINDOW_TITLE_COLOR: Color = Color::srgb(0.875, 0.875, 0.875);
 
 // Modal window colors
 pub const MODAL_OVERLAY: Color = Color::srgba(0.0, 0.0, 0.0, 0.6);
@@ -50,5 +51,19 @@ pub mod egui {
         (super::ACCENT_YELLOW_R * 255.0) as u8,
         (super::ACCENT_YELLOW_G * 255.0) as u8,
         (super::ACCENT_YELLOW_B * 255.0) as u8,
+    );
+
+    /// Window title text color for egui (matches WINDOW_TITLE_COLOR)
+    pub const WINDOW_TITLE_COLOR: egui::Color32 = egui::Color32::from_rgb(
+        (0.875 * 255.0) as u8,
+        (0.875 * 255.0) as u8,
+        (0.875 * 255.0) as u8,
+    );
+
+    /// Window background color for egui: RGB(0.184, 0.184, 0.184)
+    pub const WINDOW_BACKGROUND: egui::Color32 = egui::Color32::from_rgb(
+        (0.184 * 255.0) as u8,
+        (0.184 * 255.0) as u8,
+        (0.184 * 255.0) as u8,
     );
 }
